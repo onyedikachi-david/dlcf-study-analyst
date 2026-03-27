@@ -1,44 +1,416 @@
 import { useTimerStore, useWeekStore } from "@/src/stores";
-import { Colors } from "@/src/theme/colors";
 import { DAYS, POMODORO } from "@/src/utils/constants";
 import {
-    formatCountdown,
-    formatTimeFromMinutes,
-    getCurrentDayIndex,
+  formatCountdown,
+  formatTimeFromMinutes,
+  getCurrentDayIndex,
 } from "@/src/utils/time";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-    AppState,
-    AppStateStatus,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    useColorScheme,
-    Vibration,
-    View,
+  AppState,
+  AppStateStatus,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useColorScheme,
+  Vibration,
+  View,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withRepeat,
-    withSequence,
-    withTiming,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+/* ─────────────────────────────────────────────────────────
+   Design Token Interface
+───────────────────────────────────────────────────────── */
+interface DesignTokens {
+  bg: string;
+  surfaceLow: string;
+  surfaceMid: string;
+  surfaceHigh: string;
+  surfaceHighest: string;
+  surfaceCard: string;
+  primary: string;
+  primaryContainer: string;
+  onPrimary: string;
+  secondary: string;
+  secondaryContainer: string;
+  onSecondary: string;
+  tertiary: string;
+  tertiaryContainer: string;
+  onTertiaryContainer: string;
+  text: string;
+  textSecondary: string;
+  outline: string;
+  outlineVariant: string;
+  error: string;
+  shadow: string;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Component Props
+───────────────────────────────────────────────────────── */
 interface PomodoroTimerProps {
   visible: boolean;
   onClose: () => void;
 }
 
+/* ─────────────────────────────────────────────────────────
+   Static StyleSheets  (declared BEFORE the component)
+───────────────────────────────────────────────────────── */
+const baseStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  /* ── Header ── */
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  headerTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -1,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeBtnText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  /* ── Shared section accent bar ── */
+  accentBar: {
+    width: 4,
+    height: 20,
+    borderRadius: 2,
+    marginRight: 10,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  /* ── Shared pill / chip ── */
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 28,
+    alignSelf: "flex-start",
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  /* ── Shared full-width action button ── */
+  actionBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionBtnText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  /* ── Text-only link button ── */
+  textBtn: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  textBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+});
+
+const timerStyles = StyleSheet.create({
+  /* ── Setup view ── */
+  setupScroll: {
+    flex: 1,
+  },
+  setupScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+  setupCard: {
+    borderRadius: 22,
+    padding: 24,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  subjectInput: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 14,
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 20,
+    borderWidth: 1.5,
+  },
+  presetsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 28,
+  },
+  presetChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 28,
+  },
+  presetChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  pomodoroCount: {
+    textAlign: "center",
+    marginTop: 20,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  /* ── Timer view ── */
+  timerContainer: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  sessionChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 28,
+    marginBottom: 28,
+  },
+  sessionChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  timerCircleWrap: {
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    position: "relative",
+    borderWidth: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 32,
+  },
+  timerProgressOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    opacity: 0.15,
+  },
+  timerText: {
+    fontSize: 60,
+    fontWeight: "200",
+    fontVariant: ["tabular-nums"],
+    zIndex: 1,
+  },
+  timerLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 6,
+    zIndex: 1,
+  },
+  controlsRow: {
+    flexDirection: "row",
+    gap: 14,
+    marginBottom: 24,
+    width: "100%",
+    justifyContent: "center",
+  },
+  controlBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 22,
+    paddingVertical: 16,
+    borderRadius: 20,
+    gap: 8,
+    flex: 1,
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  controlIcon: {
+    fontSize: 18,
+  },
+  controlBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  subjectChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 28,
+    marginBottom: 20,
+    alignSelf: "center",
+  },
+  subjectChipText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+});
+
+const promptStyles = StyleSheet.create({
+  /* ── Save prompt view ── */
+  promptScroll: {
+    flex: 1,
+  },
+  promptScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
+    alignItems: "center",
+  },
+  heroCelebCard: {
+    width: "100%",
+    borderRadius: 22,
+    padding: 32,
+    alignItems: "center",
+    marginBottom: 24,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  heroEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  heroSubtitle: {
+    fontSize: 15,
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  minutesValue: {
+    fontSize: 40,
+    fontWeight: "800",
+    letterSpacing: -1,
+  },
+  minutesLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 2,
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  promptActionsWrap: {
+    width: "100%",
+    gap: 12,
+    marginTop: 4,
+  },
+  outlineBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+  },
+  outlineBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+});
+
+/* Merge all style sheets into one `s` object */
+const s = { ...baseStyles, ...timerStyles, ...promptStyles };
+
+/* ─────────────────────────────────────────────────────────
+   Component
+───────────────────────────────────────────────────────── */
 export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
-  const colors = isDark ? Colors.dark : Colors.light;
 
+  /* ── Design tokens ── */
+  const dt = useMemo<DesignTokens>(
+    () => ({
+      bg: isDark ? "#0d1117" : "#f8fafc",
+      surfaceLow: isDark ? "#161b22" : "#f1f5f9",
+      surfaceMid: isDark ? "#1c2128" : "#e8edf2",
+      surfaceHigh: isDark ? "#21262d" : "#dde3e9",
+      surfaceHighest: isDark ? "#30363d" : "#ced5dc",
+      surfaceCard: isDark ? "#161b22" : "#ffffff",
+      primary: isDark ? "#7fb6ff" : "#0060ad",
+      primaryContainer: isDark ? "#003e7a" : "#d4e7ff",
+      onPrimary: isDark ? "#003258" : "#ffffff",
+      secondary: isDark ? "#4ecdc4" : "#146a65",
+      secondaryContainer: isDark ? "#0d3d3a" : "#cef5f1",
+      onSecondary: isDark ? "#00312e" : "#ffffff",
+      tertiary: isDark ? "#eec540" : "#745c00",
+      tertiaryContainer: isDark ? "#564400" : "#ffeea3",
+      onTertiaryContainer: isDark ? "#ffeea3" : "#241a00",
+      text: isDark ? "#e6edf3" : "#0d1117",
+      textSecondary: isDark ? "#8b949e" : "#57606a",
+      outline: isDark ? "#30363d" : "#d0d7de",
+      outlineVariant: isDark ? "#21262d" : "#e8edf2",
+      error: isDark ? "#f87171" : "#ac3434",
+      shadow: isDark ? "rgba(0,0,0,0.4)" : "rgba(42,52,57,0.06)",
+    }),
+    [isDark],
+  );
+
+  /* ── Store ── */
   const {
     session,
     startWork,
@@ -53,16 +425,19 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
   } = useTimerStore();
   const { addTimeToNextAvailableSlot } = useWeekStore();
 
+  /* ── Local state ── */
   const [subject, setSubject] = useState("");
   const [secondsRemaining, setSecondsRemaining] = useState(
     POMODORO.WORK_MINS * 60,
   );
   const [showSavePrompt, setShowSavePrompt] = useState(false);
 
+  /* ── Refs ── */
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appState = useRef(AppState.currentState);
   const backgroundTime = useRef<number>(0);
 
+  /* ── Animation ── */
   const pulseScale = useSharedValue(1);
 
   const pulseStyle = useAnimatedStyle(() => ({
@@ -86,6 +461,7 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     }
   }, [session?.status, pulseScale]);
 
+  /* ── App-state background handling ── */
   useEffect(() => {
     const subscription = AppState.addEventListener(
       "change",
@@ -110,6 +486,7 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     return () => subscription.remove();
   }, [session?.status]);
 
+  /* ── Countdown interval ── */
   useEffect(() => {
     if (session?.status === "running") {
       intervalRef.current = setInterval(() => {
@@ -135,6 +512,7 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     };
   }, [session?.status]);
 
+  /* ── Callbacks ── */
   const handleTimerComplete = useCallback(() => {
     Vibration.vibrate([0, 500, 200, 500]);
     complete();
@@ -215,6 +593,7 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     onClose();
   }, [reset, onClose]);
 
+  /* ── Derived values ── */
   const progress = session
     ? 1 - secondsRemaining / (session.durationMins * 60)
     : 0;
@@ -226,6 +605,18 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     session.status === "completed" ||
     session.status === "cancelled";
 
+  const isBreak = session?.type === "break";
+  const timerAccentColor = isBreak ? dt.secondary : dt.primary;
+  const timerAccentContainer = isBreak
+    ? dt.secondaryContainer
+    : dt.primaryContainer;
+
+  /* ── Header title ── */
+  const headerTitle = isBreak ? "☕ Break Time" : "📚 Study Session";
+
+  /* ─────────────────────────────────────────────────
+     RENDER
+  ───────────────────────────────────────────────── */
   return (
     <Modal
       visible={visible}
@@ -234,176 +625,280 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     >
       <View
         style={[
-          styles.container,
-          { backgroundColor: colors.background, paddingTop: insets.top },
+          s.container,
+          { backgroundColor: dt.bg, paddingTop: insets.top },
         ]}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>
-            {session?.type === "break" ? "☕ Break Time" : "📚 Study Session"}
-          </Text>
-          <Pressable onPress={handleClose} style={styles.closeBtn}>
-            <Text
-              style={[styles.closeBtnText, { color: colors.textSecondary }]}
-            >
-              ✕
+        {/* ── Header ── */}
+        <View style={s.header}>
+          <View style={s.headerTitleWrap}>
+            <Text style={[s.title, { color: dt.text }]}>
+              {isIdle && !showSavePrompt ? "🎯 Focus" : headerTitle}
             </Text>
+          </View>
+          <Pressable
+            onPress={handleClose}
+            style={[s.closeBtn, { backgroundColor: dt.surfaceMid }]}
+          >
+            <Text style={[s.closeBtnText, { color: dt.textSecondary }]}>✕</Text>
           </Pressable>
         </View>
 
+        {/* ══════════════════════════════════════════
+            SAVE PROMPT
+        ══════════════════════════════════════════ */}
         {showSavePrompt ? (
-          <View style={styles.savePrompt}>
-            <Text style={[styles.saveTitle, { color: colors.text }]}>
-              🎉 Pomodoro Complete!
-            </Text>
-            <Text
-              style={[styles.saveSubtitle, { color: colors.textSecondary }]}
-            >
-              You studied {session?.subject} for {getElapsedMinutes()} minutes.
-            </Text>
-
-            <Pressable
-              onPress={handleSaveAndContinue}
-              style={[styles.primaryBtn, { backgroundColor: colors.success }]}
-            >
-              <Text style={styles.primaryBtnText}>Save & Take Break</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleSkipBreak}
-              style={[styles.secondaryBtn, { borderColor: colors.primary }]}
-            >
-              <Text
-                style={[styles.secondaryBtnText, { color: colors.primary }]}
-              >
-                Skip Break, Continue Studying
-              </Text>
-            </Pressable>
-
-            <Pressable onPress={handleClose} style={styles.textBtn}>
-              <Text
-                style={[styles.textBtnText, { color: colors.textSecondary }]}
-              >
-                End Session
-              </Text>
-            </Pressable>
-          </View>
-        ) : isIdle ? (
-          <View style={styles.setupContainer}>
-            <Text style={[styles.setupLabel, { color: colors.textSecondary }]}>
-              What are you studying?
-            </Text>
-            <TextInput
+          <ScrollView
+            style={s.promptScroll}
+            contentContainerStyle={s.promptScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Hero celebration card */}
+            <View
               style={[
-                styles.subjectInput,
-                { backgroundColor: colors.surface, color: colors.text },
-              ]}
-              value={subject}
-              onChangeText={setSubject}
-              placeholder="e.g., CHM101 Stoichiometry"
-              placeholderTextColor={colors.textSecondary}
-              autoFocus
-            />
-
-            <View style={styles.presetsRow}>
-              {["CHM101", "PHY103", "MTH101", "BIO101"].map((code) => (
-                <Pressable
-                  key={code}
-                  onPress={() => setSubject(code)}
-                  style={[
-                    styles.presetBtn,
-                    { backgroundColor: colors.surface },
-                  ]}
-                >
-                  <Text style={[styles.presetText, { color: colors.text }]}>
-                    {code}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              onPress={handleStartWork}
-              disabled={!subject.trim()}
-              style={[
-                styles.startBtn,
+                s.heroCelebCard,
                 {
-                  backgroundColor: subject.trim()
-                    ? colors.primary
-                    : colors.surface,
-                  opacity: subject.trim() ? 1 : 0.5,
+                  backgroundColor: dt.tertiaryContainer,
+                  shadowColor: dt.shadow,
                 },
               ]}
             >
-              <Text style={styles.startBtnText}>
-                Start {POMODORO.WORK_MINS} min Session
+              <Text style={s.heroEmoji}>🎉</Text>
+              <Text style={[s.heroTitle, { color: dt.onTertiaryContainer }]}>
+                Pomodoro Complete!
               </Text>
-            </Pressable>
+              <Text style={[s.heroSubtitle, { color: dt.textSecondary }]}>
+                {session?.subject
+                  ? `You studied ${session.subject}`
+                  : "Great work"}{" "}
+                — keep it up!
+              </Text>
 
-            {session?.pomodoroCount ? (
-              <Text
-                style={[styles.pomodoroCount, { color: colors.textSecondary }]}
+              {/* Minutes studied */}
+              <Text style={[s.minutesValue, { color: dt.primary }]}>
+                {getElapsedMinutes()}
+              </Text>
+              <Text style={[s.minutesLabel, { color: dt.textSecondary }]}>
+                minutes studied
+              </Text>
+            </View>
+
+            {/* Action buttons */}
+            <View style={s.promptActionsWrap}>
+              {/* Save & Take Break */}
+              <Pressable
+                onPress={handleSaveAndContinue}
+                style={[s.actionBtn, { backgroundColor: dt.secondary }]}
               >
-                🍅 {session.pomodoroCount} pomodoros completed today
-              </Text>
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.timerContainer}>
-            <Text
-              style={[styles.subjectLabel, { color: colors.textSecondary }]}
-            >
-              {session?.subject}
-            </Text>
+                <Text style={s.actionBtnText}>Save &amp; Take Break</Text>
+              </Pressable>
 
-            <Animated.View style={[styles.timerCircle, pulseStyle]}>
+              {/* Skip Break, Continue Studying */}
+              <Pressable
+                onPress={handleSkipBreak}
+                style={[s.outlineBtn, { borderColor: dt.secondary }]}
+              >
+                <Text style={[s.outlineBtnText, { color: dt.secondary }]}>
+                  Skip Break, Continue Studying
+                </Text>
+              </Pressable>
+
+              {/* End Session */}
+              <Pressable onPress={handleClose} style={s.textBtn}>
+                <Text style={[s.textBtnText, { color: dt.textSecondary }]}>
+                  End Session
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        ) : /* ══════════════════════════════════════════
+            SETUP VIEW  (idle)
+        ══════════════════════════════════════════ */
+        isIdle ? (
+          <ScrollView
+            style={s.setupScroll}
+            contentContainerStyle={s.setupScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Setup card */}
+            <View
+              style={[
+                s.setupCard,
+                {
+                  backgroundColor: dt.surfaceCard,
+                  shadowColor: dt.shadow,
+                },
+              ]}
+            >
+              {/* Section title with accent bar */}
+              <View style={s.sectionTitleRow}>
+                <View style={[s.accentBar, { backgroundColor: dt.primary }]} />
+                <Text style={[s.sectionTitle, { color: dt.text }]}>
+                  What are you studying?
+                </Text>
+              </View>
+
+              {/* Subject input */}
+              <TextInput
+                style={[
+                  s.subjectInput,
+                  {
+                    backgroundColor: dt.surfaceLow,
+                    color: dt.text,
+                    borderColor: dt.outline,
+                  },
+                ]}
+                value={subject}
+                onChangeText={setSubject}
+                placeholder="e.g., CHM101 Stoichiometry"
+                placeholderTextColor={dt.textSecondary}
+                autoFocus
+              />
+
+              {/* Preset chips */}
+              <View style={s.presetsRow}>
+                {["CHM101", "PHY103", "MTH101", "BIO101"].map((code) => (
+                  <Pressable
+                    key={code}
+                    onPress={() => setSubject(code)}
+                    style={[
+                      s.presetChip,
+                      { backgroundColor: dt.primaryContainer },
+                    ]}
+                  >
+                    <Text style={[s.presetChipText, { color: dt.primary }]}>
+                      {code}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Start button */}
+              <Pressable
+                onPress={handleStartWork}
+                disabled={!subject.trim()}
+                style={[
+                  s.actionBtn,
+                  {
+                    backgroundColor: subject.trim()
+                      ? dt.primary
+                      : dt.surfaceHigh,
+                    opacity: subject.trim() ? 1 : 0.5,
+                  },
+                ]}
+              >
+                <Text style={s.actionBtnText}>
+                  🎯 Start {POMODORO.WORK_MINS} min Focus Session
+                </Text>
+              </Pressable>
+
+              {/* Pomodoro count */}
+              {session?.pomodoroCount ? (
+                <Text style={[s.pomodoroCount, { color: dt.tertiary }]}>
+                  🍅 {session.pomodoroCount} pomodoros completed today
+                </Text>
+              ) : null}
+            </View>
+          </ScrollView>
+        ) : (
+          /* ══════════════════════════════════════════
+            TIMER VIEW  (running / paused)
+        ══════════════════════════════════════════ */
+          <View style={s.timerContainer}>
+            {/* Subject chip */}
+            <View
+              style={[s.subjectChip, { backgroundColor: dt.primaryContainer }]}
+            >
+              <Text style={[s.subjectChipText, { color: dt.primary }]}>
+                {session?.subject}
+              </Text>
+            </View>
+
+            {/* Session-type chip (Work / Break) */}
+            <View
+              style={[s.sessionChip, { backgroundColor: timerAccentContainer }]}
+            >
+              <Text style={[s.sessionChipText, { color: timerAccentColor }]}>
+                {isBreak ? "☕ Break" : "🎯 Focus"}
+              </Text>
+            </View>
+
+            {/* Timer circle */}
+            <Animated.View
+              style={[
+                s.timerCircleWrap,
+                pulseStyle,
+                {
+                  backgroundColor: dt.surfaceCard,
+                  borderColor: timerAccentColor,
+                  shadowColor: dt.shadow,
+                },
+              ]}
+            >
+              {/* Progress fill overlay */}
               <View
                 style={[
-                  styles.timerProgress,
+                  s.timerProgressOverlay,
                   {
-                    backgroundColor:
-                      session?.type === "break"
-                        ? colors.success
-                        : colors.primary,
+                    backgroundColor: timerAccentColor,
                     height: `${progress * 100}%`,
                   },
                 ]}
               />
-              <Text style={[styles.timerText, { color: colors.text }]}>
+
+              {/* Time text */}
+              <Text style={[s.timerText, { color: dt.text }]}>
                 {formatCountdown(secondsRemaining)}
               </Text>
-              <Text
-                style={[styles.timerLabel, { color: colors.textSecondary }]}
-              >
-                {session?.type === "break" ? "Break" : "Focus"}
+
+              {/* Focus / Break label */}
+              <Text style={[s.timerLabel, { color: dt.textSecondary }]}>
+                {isBreak ? "Break" : "Focus"}
               </Text>
             </Animated.View>
 
-            <View style={styles.controlsRow}>
+            {/* Control buttons */}
+            <View style={s.controlsRow}>
+              {/* Pause / Resume */}
               <Pressable
                 onPress={handlePauseResume}
-                style={[styles.controlBtn, { backgroundColor: colors.surface }]}
+                style={[
+                  s.controlBtn,
+                  {
+                    backgroundColor: dt.surfaceHigh,
+                    shadowColor: dt.shadow,
+                  },
+                ]}
               >
-                <Text style={styles.controlIcon}>
-                  {isRunning ? "⏸️" : "▶️"}
-                </Text>
-                <Text style={[styles.controlText, { color: colors.text }]}>
+                <Text style={s.controlIcon}>{isRunning ? "⏸️" : "▶️"}</Text>
+                <Text style={[s.controlBtnText, { color: dt.primary }]}>
                   {isRunning ? "Pause" : "Resume"}
                 </Text>
               </Pressable>
 
+              {/* Stop */}
               <Pressable
                 onPress={handleStop}
-                style={[styles.controlBtn, { backgroundColor: colors.error }]}
+                style={[
+                  s.controlBtn,
+                  {
+                    backgroundColor: dt.error,
+                    shadowColor: dt.shadow,
+                  },
+                ]}
               >
-                <Text style={styles.controlIcon}>⏹️</Text>
-                <Text style={styles.controlTextWhite}>Stop</Text>
+                <Text style={s.controlIcon}>⏹️</Text>
+                <Text style={[s.controlBtnText, { color: "#ffffff" }]}>
+                  Stop
+                </Text>
               </Pressable>
             </View>
 
-            {session?.type === "break" ? (
-              <Pressable onPress={handleSkipBreak} style={styles.textBtn}>
-                <Text style={[styles.textBtnText, { color: colors.primary }]}>
+            {/* Skip break link */}
+            {isBreak ? (
+              <Pressable onPress={handleSkipBreak} style={s.textBtn}>
+                <Text style={[s.textBtnText, { color: dt.primary }]}>
                   Skip Break →
                 </Text>
               </Pressable>
@@ -414,179 +909,3 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  closeBtn: {
-    padding: 8,
-  },
-  closeBtnText: {
-    fontSize: 24,
-  },
-  setupContainer: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 40,
-  },
-  setupLabel: {
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  subjectInput: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  presetsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 32,
-  },
-  presetBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  presetText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  startBtn: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  startBtnText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  pomodoroCount: {
-    textAlign: "center",
-    marginTop: 24,
-    fontSize: 14,
-  },
-  timerContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingTop: 40,
-  },
-  subjectLabel: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: 32,
-  },
-  timerCircle: {
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: "rgba(0,0,0,0.05)",
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-    position: "relative",
-  },
-  timerProgress: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    opacity: 0.2,
-  },
-  timerText: {
-    fontSize: 56,
-    fontWeight: "200",
-    fontVariant: ["tabular-nums"],
-  },
-  timerLabel: {
-    fontSize: 14,
-    marginTop: 8,
-  },
-  controlsRow: {
-    flexDirection: "row",
-    gap: 16,
-    marginTop: 48,
-  },
-  controlBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  controlIcon: {
-    fontSize: 18,
-  },
-  controlText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  controlTextWhite: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  savePrompt: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    alignItems: "center",
-  },
-  saveTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  saveSubtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 40,
-  },
-  primaryBtn: {
-    width: "100%",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  secondaryBtn: {
-    width: "100%",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 2,
-    marginBottom: 12,
-  },
-  secondaryBtnText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  textBtn: {
-    paddingVertical: 12,
-  },
-  textBtnText: {
-    fontSize: 14,
-  },
-});

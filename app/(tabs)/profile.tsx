@@ -4,17 +4,23 @@ import {
   useProfileStore,
   useWeekStore,
 } from "@/src/stores";
-import { BadgeColors, Colors } from "@/src/theme/colors";
 import { ALL_BADGES } from "@/src/utils/constants";
 import { extractMostStudiedCourse } from "@/src/utils/courseParser";
-import { minutesToHrs } from "@/src/utils/time";
+import { minutesToHrs, durationMinutes } from "@/src/utils/time";
+import {
+  computeStreak,
+  computeLevel,
+  computeWeekTotals,
+} from "@/src/utils/badges";
 import { ProfileSyncService } from "@/src/services/profileSync";
 import { useAuth } from "@/src/contexts/AuthContext";
+import { useAchievementsStore } from "@/src/stores/useAchievementsStore";
+import { getUnlockedCount, getTotalPoints } from "@/src/utils/achievements";
 import Toast from "react-native-toast-message";
 import AchievementsModal from "@/components/AchievementsModal";
-import React, { useCallback, useRef, useState } from "react";
+import CustomAlert, { type AlertButton } from "@/components/CustomAlert";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,38 +28,109 @@ import {
   TextInput,
   useColorScheme,
   View,
+  type DimensionValue,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const DAYS_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
-  const colors = isDark ? Colors.dark : Colors.light;
 
   const { user, signOut } = useAuth();
   const { profile, setProfile } = useProfileStore();
-  const { earnedBadges, archives, cumulativeMinutes } = useAppStore();
+  const { earnedBadges, archives, cumulativeMinutes, goalMins } = useAppStore();
   const { week } = useWeekStore();
   const { getUserRank } = useLeaderboardStore();
+  const { achievements } = useAchievementsStore();
 
-  // Debounce timer for profile sync
   const syncTimeoutRef = useRef<number | null>(null);
-
-  const unlockedCount = earnedBadges.length;
   const userRank = getUserRank(profile.name);
   const [achievementsVisible, setAchievementsVisible] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    icon?: string;
+    buttons?: AlertButton[];
+  }>({ visible: false, title: "" });
+
+  const dismissAlert = useCallback(() => {
+    setAlertConfig((prev) => ({ ...prev, visible: false }));
+  }, []);
+
+  // Computed values
+  const totals = computeWeekTotals(week, goalMins);
+  const streak = computeStreak(week);
+  const { level, xp, levelPct } = computeLevel(
+    cumulativeMinutes + totals.total,
+  );
+  const totalHours = Math.floor((cumulativeMinutes + totals.total) / 60);
+  const totalPoints = getTotalPoints(achievements);
+  const achievementUnlocked = getUnlockedCount(achievements);
+  const totalAchievements = achievements.length;
+  const xpToNext = 300 - xp;
+
+  // Weekly heatmap data
+  const weeklyMinutes = useMemo(() => {
+    return week.map((day) => {
+      return (
+        durationMinutes(day.st1.start, day.st1.stop) +
+        durationMinutes(day.st2.start, day.st2.stop) +
+        durationMinutes(day.st3.start, day.st3.stop)
+      );
+    });
+  }, [week]);
+
+  const maxDayMinutes = Math.max(...weeklyMinutes, 1);
+
+  // Top 3 earned badges to display as "Ethereal Badges"
+  const displayBadges = useMemo(() => {
+    const earned = ALL_BADGES.filter((b) => earnedBadges.includes(b.id));
+    const locked = ALL_BADGES.filter((b) => !earnedBadges.includes(b.id));
+    return [...earned, ...locked].slice(0, 6);
+  }, [earnedBadges]);
+
+  // Design tokens (consistent with board screen)
+  const dt = useMemo(
+    () => ({
+      bg: isDark ? "#0f0f1a" : "#f6fafe",
+      surfaceLow: isDark ? "#1a1a2e" : "#eff4f9",
+      surfaceMid: isDark ? "#1e1e32" : "#e8eff4",
+      surfaceHigh: isDark ? "#2a2a45" : "#e1e9f0",
+      surfaceHighest: isDark ? "#333352" : "#dae4eb",
+      surfaceCard: isDark ? "#1e1e32" : "#ffffff",
+      primary: isDark ? "#7fb6ff" : "#0060ad",
+      primaryContainer: isDark ? "#2a4a7a" : "#9ac3ff",
+      onPrimary: isDark ? "#001d3d" : "#f8f8ff",
+      secondary: isDark ? "#4ecdc4" : "#146a65",
+      secondaryContainer: isDark ? "#1a4a47" : "#a7f3ec",
+      onSecondary: isDark ? "#003330" : "#e1fffb",
+      tertiary: isDark ? "#eec540" : "#745c00",
+      tertiaryContainer: isDark ? "#5a4800" : "#fdd34d",
+      onTertiaryContainer: isDark ? "#fdd34d" : "#5c4900",
+      text: isDark ? "#f1f5f9" : "#2a3439",
+      textSecondary: isDark ? "#94a3b8" : "#576067",
+      outline: isDark ? "#64748b" : "#727c82",
+      outlineVariant: isDark ? "#475569" : "#a9b3ba",
+      error: isDark ? "#f87171" : "#ac3434",
+      shadow: isDark ? "rgba(0,0,0,0.4)" : "rgba(42,52,57,0.06)",
+    }),
+    [isDark],
+  );
 
   const handleSignOut = async () => {
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
+    setAlertConfig({
+      visible: true,
+      title: "Sign Out",
+      message: "Are you sure you want to sign out?",
+      icon: "👋",
+      buttons: [
+        { text: "Cancel", style: "cancel" },
         {
           text: "Sign Out",
           style: "destructive",
@@ -84,23 +161,17 @@ export default function ProfileScreen() {
           },
         },
       ],
-      { cancelable: true },
-    );
+    });
   };
 
-  // Debounced profile sync to Supabase
   const syncProfileToSupabase = useCallback(
     (updates: Partial<typeof profile>) => {
       if (!user?.id) return;
-
-      // Clear existing timeout
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
-
-      // Set new timeout to sync after 1 second of no changes
       syncTimeoutRef.current = setTimeout(async () => {
-        const dbUpdates: any = {};
+        const dbUpdates: Record<string, string | undefined> = {};
         if (updates.name !== undefined) dbUpdates.name = updates.name;
         if (updates.faculty !== undefined) dbUpdates.faculty = updates.faculty;
         if (updates.department !== undefined)
@@ -108,12 +179,10 @@ export default function ProfileScreen() {
         if (updates.level !== undefined) dbUpdates.level = updates.level;
         if (updates.accountabilityPartner !== undefined)
           dbUpdates.accountability_partner = updates.accountabilityPartner;
-
         const { error } = await ProfileSyncService.updateProfile(
           user.id,
           dbUpdates,
         );
-
         if (error) {
           console.error("Failed to sync profile:", error);
         }
@@ -124,301 +193,429 @@ export default function ProfileScreen() {
 
   const handleArchiveWeek = useCallback(() => {
     const { addArchive, addCumulativeMinutes } = useAppStore.getState();
-    const { week, resetWeek } = useWeekStore.getState();
+    const { week: currentWeek, resetWeek } = useWeekStore.getState();
 
-    const total = week.reduce((sum, d) => {
-      const dayMins =
-        (d.st1.start && d.st1.stop ? 1 : 0) +
-        (d.st2.start && d.st2.stop ? 1 : 0) +
-        (d.st3.start && d.st3.stop ? 1 : 0);
-      return sum + dayMins;
+    const total = currentWeek.reduce((sum, d) => {
+      return (
+        sum +
+        durationMinutes(d.st1.start, d.st1.stop) +
+        durationMinutes(d.st2.start, d.st2.stop) +
+        durationMinutes(d.st3.start, d.st3.stop)
+      );
     }, 0);
 
     if (total === 0) {
-      Alert.alert("No Data", "No study sessions to archive this week.");
+      setAlertConfig({
+        visible: true,
+        title: "No Data",
+        message: "No study sessions to archive this week.",
+        icon: "📭",
+        buttons: [{ text: "OK", style: "default" }],
+      });
       return;
     }
 
-    const topic = extractMostStudiedCourse(week);
+    const topic = extractMostStudiedCourse(currentWeek);
     const rank = userRank;
 
-    addArchive({
-      total,
-      topic,
-      rank,
-      badges: earnedBadges,
-    });
-
+    addArchive({ total, topic, rank, badges: earnedBadges });
     addCumulativeMinutes(total);
     resetWeek();
 
-    Alert.alert("Archived!", "Your week has been saved to the archive.");
+    setAlertConfig({
+      visible: true,
+      title: "Week Archived!",
+      message: "Your week has been saved to the archive.",
+      icon: "🏆",
+      buttons: [{ text: "Nice!", style: "default" }],
+    });
   }, [earnedBadges, userRank]);
 
+  const renderField = (
+    label: string,
+    value: string,
+    fieldKey: string,
+    placeholder: string,
+    onChangeText: (text: string) => void,
+  ) => {
+    const isEditing = editingField === fieldKey;
+    return (
+      <View style={s.fieldRow}>
+        <Text style={[s.fieldLabel, { color: dt.textSecondary }]}>{label}</Text>
+        {isEditing ? (
+          <TextInput
+            style={[
+              s.fieldInput,
+              { backgroundColor: dt.surfaceLow, color: dt.text },
+            ]}
+            value={value}
+            onChangeText={onChangeText}
+            onBlur={() => setEditingField(null)}
+            placeholder={placeholder}
+            placeholderTextColor={dt.outlineVariant}
+            autoFocus
+          />
+        ) : (
+          <Pressable onPress={() => setEditingField(fieldKey)}>
+            <View style={[s.fieldValueRow, { backgroundColor: dt.surfaceLow }]}>
+              <Text
+                style={[
+                  s.fieldValue,
+                  { color: value ? dt.text : dt.outlineVariant },
+                ]}
+                numberOfLines={1}
+              >
+                {value || placeholder}
+              </Text>
+              <Text style={[s.fieldEditIcon, { color: dt.outlineVariant }]}>
+                ✏️
+              </Text>
+            </View>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
+  // Determine elite label
+  const eliteLabel =
+    level >= 10
+      ? "Elite Student"
+      : level >= 5
+        ? "Advanced Learner"
+        : level >= 3
+          ? "Rising Scholar"
+          : "Student";
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[s.container, { backgroundColor: dt.bg }]}>
       <ScrollView
         contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + 20 },
+          s.scrollContent,
+          { paddingTop: insets.top + 12 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={[styles.brand, { color: colors.primary }]}>
-              👤 Profile
-            </Text>
-            <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-              Your study identity
-            </Text>
-          </View>
-          <View style={styles.headerRight}>
-            {userRank > 0 && (
-              <View
-                style={[
-                  styles.rankBadge,
-                  { backgroundColor: colors.primary + "20" },
-                ]}
-              >
-                <Text style={[styles.rankBadgeText, { color: colors.primary }]}>
-                  #{userRank}
-                </Text>
-              </View>
-            )}
-            <Pressable
-              onPress={handleSignOut}
-              disabled={signingOut}
-              style={[
-                styles.signOutButton,
-                { backgroundColor: colors.error + "15" },
-                signingOut && { opacity: 0.5 },
-              ]}
-            >
-              <Text style={[styles.signOutButtonText, { color: colors.error }]}>
-                {signingOut ? "..." : "Sign Out"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Profile Card */}
-        <View style={[styles.profileCard, { backgroundColor: colors.surface }]}>
-          <View style={styles.avatarSection}>
+        {/* ─── Header ─── */}
+        <View style={s.header}>
+          <View style={s.headerLeft}>
             <View
-              style={[
-                styles.avatar,
-                { backgroundColor: colors.primary + "20" },
-              ]}
+              style={[s.headerAvatarWrap, { borderColor: dt.primaryContainer }]}
             >
-              <Text style={styles.avatarEmoji}>
+              <Text style={s.headerAvatarText}>
                 {profile.name ? profile.name.charAt(0).toUpperCase() : "👤"}
               </Text>
-            </View>
-            <Text style={[styles.avatarName, { color: colors.text }]}>
-              {profile.name || "Student"}
-            </Text>
-            <Text style={[styles.avatarMeta, { color: colors.textSecondary }]}>
-              {profile.faculty}
-              {profile.faculty && profile.department ? " • " : ""}
-              {profile.department}
-            </Text>
-          </View>
-
-          <View style={styles.fieldsSection}>
-            <View style={styles.fieldRow}>
-              <Text
-                style={[styles.fieldLabel, { color: colors.textSecondary }]}
-              >
-                Full Name
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, color: colors.text },
-                ]}
-                value={profile.name}
-                onChangeText={(text) => {
-                  setProfile({ name: text });
-                  syncProfileToSupabase({ name: text });
-                }}
-                placeholder="Enter your name"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.fieldRow}>
-              <Text
-                style={[styles.fieldLabel, { color: colors.textSecondary }]}
-              >
-                Faculty
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, color: colors.text },
-                ]}
-                value={profile.faculty}
-                onChangeText={(text) => {
-                  setProfile({ faculty: text });
-                  syncProfileToSupabase({ faculty: text });
-                }}
-                placeholder="e.g., Sciences"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.fieldRow}>
-              <Text
-                style={[styles.fieldLabel, { color: colors.textSecondary }]}
-              >
-                Department
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, color: colors.text },
-                ]}
-                value={profile.department}
-                onChangeText={(text) => {
-                  setProfile({ department: text });
-                  syncProfileToSupabase({ department: text });
-                }}
-                placeholder="e.g., Chemistry"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.fieldRow}>
-              <Text
-                style={[styles.fieldLabel, { color: colors.textSecondary }]}
-              >
-                Level
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, color: colors.text },
-                ]}
-                value={profile.level}
-                onChangeText={(text) => {
-                  setProfile({ level: text });
-                  syncProfileToSupabase({ level: text });
-                }}
-                placeholder="e.g., 200L"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.fieldRow}>
-              <Text
-                style={[styles.fieldLabel, { color: colors.textSecondary }]}
-              >
-                Study Buddy
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.background, color: colors.text },
-                ]}
-                value={profile.accountabilityPartner}
-                onChangeText={(text) => {
-                  setProfile({ accountabilityPartner: text });
-                  syncProfileToSupabase({ accountabilityPartner: text });
-                }}
-                placeholder="Your accountability partner"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Stats Cards */}
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>
-              {minutesToHrs(cumulativeMinutes)}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Total Time
-            </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>
-              {archives.length}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Weeks
-            </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>
-              {unlockedCount}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Badges
-            </Text>
-          </View>
-        </View>
-
-        {/* Badges Card */}
-        <View style={[styles.badgesCard, { backgroundColor: colors.surface }]}>
-          <View style={styles.badgesHeader}>
-            <Text style={[styles.badgesTitle, { color: colors.text }]}>
-              Badges
-            </Text>
-            <View style={styles.badgesHeaderRight}>
               <View
                 style={[
-                  styles.badgesCount,
-                  { backgroundColor: colors.primary + "20" },
+                  s.headerAvatarBadge,
+                  { backgroundColor: dt.tertiaryContainer, borderColor: dt.bg },
                 ]}
               >
-                <Text
-                  style={[styles.badgesCountText, { color: colors.primary }]}
-                >
-                  {unlockedCount}/{ALL_BADGES.length}
+                <Text style={s.headerAvatarBadgeIcon}>🏅</Text>
+              </View>
+            </View>
+            <Text style={[s.headerTitle, { color: dt.primary }]}>
+              FocusFlow
+            </Text>
+          </View>
+          <Pressable
+            onPress={handleSignOut}
+            disabled={signingOut}
+            style={({ pressed }) => [
+              s.signOutBtn,
+              {
+                backgroundColor: dt.error + "12",
+                opacity: signingOut ? 0.5 : pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Text style={[s.signOutBtnText, { color: dt.error }]}>
+              {signingOut ? "..." : "Sign Out"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* ─── Hero Profile Section ─── */}
+        <View style={s.heroSection}>
+          <View style={s.heroLeft}>
+            <Text style={[s.heroLabel, { color: dt.secondary }]}>
+              {eliteLabel}
+            </Text>
+            <Text style={[s.heroName, { color: dt.text }]}>
+              {profile.name || "Student"}
+            </Text>
+            <Text style={[s.heroDesc, { color: dt.textSecondary }]}>
+              {profile.faculty && profile.department
+                ? `${profile.faculty} \u2022 ${profile.department}`
+                : profile.faculty ||
+                  profile.department ||
+                  "Set your profile details below"}
+              {profile.level ? ` \u2022 ${profile.level}` : ""}
+            </Text>
+          </View>
+          <View style={s.heroStats}>
+            <View style={[s.heroStatCard, { backgroundColor: dt.surfaceLow }]}>
+              <Text style={[s.heroStatValue, { color: dt.primary }]}>
+                {streak}
+              </Text>
+              <Text style={[s.heroStatLabel, { color: dt.textSecondary }]}>
+                DAY STREAK
+              </Text>
+            </View>
+            <View style={[s.heroStatCard, { backgroundColor: dt.surfaceLow }]}>
+              <Text style={[s.heroStatValue, { color: dt.secondary }]}>
+                {totalHours}
+              </Text>
+              <Text style={[s.heroStatLabel, { color: dt.textSecondary }]}>
+                HOURS
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ─── Bento Grid ─── */}
+        <View style={s.bentoGrid}>
+          {/* Left Column */}
+          <View style={s.bentoLeft}>
+            {/* Ethereal Badges */}
+            <View
+              style={[
+                s.bentoCard,
+                { backgroundColor: dt.surfaceCard, shadowColor: dt.shadow },
+              ]}
+            >
+              <View style={s.bentoCardHeader}>
+                <Text style={[s.bentoCardTitle, { color: dt.text }]}>
+                  Ethereal Badges
+                </Text>
+                <Pressable onPress={() => setAchievementsVisible(true)}>
+                  <Text style={[s.bentoCardLink, { color: dt.primary }]}>
+                    View All
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={s.badgesGrid}>
+                {displayBadges.map((badge) => {
+                  const isUnlocked = earnedBadges.includes(badge.id);
+                  return (
+                    <View key={badge.id} style={s.badgeItem}>
+                      <View
+                        style={[
+                          s.badgeCircle,
+                          isUnlocked
+                            ? { backgroundColor: dt.primaryContainer }
+                            : { backgroundColor: dt.surfaceHigh, opacity: 0.5 },
+                        ]}
+                      >
+                        <Text style={s.badgeEmoji}>{badge.icon}</Text>
+                      </View>
+                      <Text
+                        style={[s.badgeName, { color: dt.text }]}
+                        numberOfLines={1}
+                      >
+                        {badge.label}
+                      </Text>
+                      <Text style={[s.badgeLevel, { color: dt.textSecondary }]}>
+                        {isUnlocked ? "Unlocked" : "Locked"}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* XP Gauge */}
+            <View style={[s.xpCard, { backgroundColor: dt.surfaceLow }]}>
+              <View style={s.xpHeader}>
+                <Text style={[s.xpHeaderTitle, { color: dt.text }]}>
+                  Next Level Progress
+                </Text>
+                <Text style={[s.xpHeaderValue, { color: dt.tertiary }]}>
+                  {xp} / 300 XP
                 </Text>
               </View>
-              <Pressable
-                onPress={() => setAchievementsVisible(true)}
+              <View
+                style={[s.xpBarBg, { backgroundColor: dt.tertiaryContainer }]}
+              >
+                <View
+                  style={[
+                    s.xpBarFill,
+                    {
+                      backgroundColor: dt.tertiary,
+                      width: `${levelPct}%` as DimensionValue,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[s.xpSubtext, { color: dt.textSecondary }]}>
+                Only {xpToNext} XP left to reach{" "}
+                <Text style={{ fontWeight: "700", color: dt.primary }}>
+                  Level {level + 1}
+                </Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* Right Column */}
+          <View style={s.bentoRight}>
+            {/* Archive Vault */}
+            <View
+              style={[
+                s.bentoCard,
+                {
+                  backgroundColor: dt.surfaceCard,
+                  shadowColor: dt.shadow,
+                  overflow: "hidden",
+                },
+              ]}
+            >
+              {/* Decorative glow */}
+              <View
                 style={[
-                  styles.achievementsButton,
-                  { backgroundColor: colors.primary },
+                  s.archiveGlow,
+                  { backgroundColor: dt.secondary + "08" },
+                ]}
+              />
+              <Text
+                style={[s.bentoCardTitle, { color: dt.text, marginBottom: 16 }]}
+              >
+                Archive Vault
+              </Text>
+              {archives.length > 0 ? (
+                <View style={s.archiveList}>
+                  {archives.slice(0, 3).map((archive, index) => (
+                    <View
+                      key={archive.id}
+                      style={[
+                        s.archiveRow,
+                        { backgroundColor: dt.surfaceLow + "60" },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          s.archiveIconWrap,
+                          {
+                            backgroundColor:
+                              index === 0
+                                ? dt.primaryContainer + "30"
+                                : dt.secondaryContainer + "30",
+                          },
+                        ]}
+                      >
+                        <Text style={s.archiveIconEmoji}>
+                          {index === 0 ? "📄" : "📁"}
+                        </Text>
+                      </View>
+                      <View style={s.archiveInfo}>
+                        <Text style={[s.archiveTitle, { color: dt.text }]}>
+                          {archive.topic || `Season ${archives.length - index}`}
+                        </Text>
+                        <Text
+                          style={[s.archiveDate, { color: dt.textSecondary }]}
+                        >
+                          {minutesToHrs(archive.total)} \u2022{" "}
+                          {new Date(archive.id).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </Text>
+                      </View>
+                      {archive.rank > 0 && archive.rank <= 3 && (
+                        <Text style={s.archiveMedal}>
+                          {["🥇", "🥈", "🥉"][archive.rank - 1]}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[s.archiveEmpty, { color: dt.textSecondary }]}>
+                  No archives yet. Complete a week and archive it!
+                </Text>
+              )}
+              <Pressable
+                onPress={handleArchiveWeek}
+                style={({ pressed }) => [
+                  s.archiveButton,
+                  {
+                    backgroundColor: dt.surfaceHigh,
+                    opacity: pressed ? 0.8 : 1,
+                  },
                 ]}
               >
-                <Text style={styles.achievementsButtonText}>
-                  🏆 Achievements
+                <Text style={[s.archiveButtonText, { color: dt.text }]}>
+                  📦 Archive This Week
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Customize / Summary Card */}
+            <View style={[s.customizeCard, { backgroundColor: dt.primary }]}>
+              <Text style={s.customizeEmoji}>✨</Text>
+              <Text style={[s.customizeTitle, { color: dt.onPrimary }]}>
+                Your Journey
+              </Text>
+              <Text style={[s.customizeDesc, { color: dt.onPrimary + "cc" }]}>
+                {totalPoints} points earned across {achievementUnlocked}/
+                {totalAchievements} achievements. Keep pushing!
+              </Text>
+              <Pressable
+                onPress={() => setAchievementsVisible(true)}
+                style={({ pressed }) => [
+                  s.customizeBtn,
+                  { opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <Text style={[s.customizeBtnText, { color: dt.primary }]}>
+                  🏆 View Achievements
                 </Text>
               </Pressable>
             </View>
           </View>
-          <View style={styles.badgesGrid}>
-            {ALL_BADGES.map((badge) => {
-              const isUnlocked = earnedBadges.includes(badge.id);
+        </View>
+
+        {/* ─── Focus Intensity Heatmap ─── */}
+        <View
+          style={[
+            s.heatmapCard,
+            { backgroundColor: dt.surfaceCard, shadowColor: dt.shadow },
+          ]}
+        >
+          <Text style={[s.heatmapTitle, { color: dt.text }]}>
+            Focus Intensity Map
+          </Text>
+          <View style={s.heatmapBars}>
+            {weeklyMinutes.map((mins, index) => {
+              const pct = maxDayMinutes > 0 ? (mins / maxDayMinutes) * 100 : 0;
+              const barColor =
+                pct >= 80
+                  ? dt.primary
+                  : pct >= 50
+                    ? dt.secondary
+                    : pct >= 30
+                      ? dt.primaryContainer
+                      : pct > 0
+                        ? dt.tertiaryContainer
+                        : dt.surfaceLow;
               return (
-                <View
-                  key={badge.id}
-                  style={[
-                    styles.badgeItem,
-                    {
-                      backgroundColor: isUnlocked
-                        ? BadgeColors.unlocked.background
-                        : BadgeColors.locked.background,
-                      borderColor: isUnlocked
-                        ? BadgeColors.unlocked.border
-                        : BadgeColors.locked.border,
-                      opacity: isUnlocked ? 1 : BadgeColors.locked.opacity,
-                    },
-                  ]}
-                >
-                  <Text style={styles.badgeIcon}>{badge.icon}</Text>
-                  <Text
-                    style={[styles.badgeLabel, { color: colors.text }]}
-                    numberOfLines={1}
+                <View key={index} style={s.heatmapBarCol}>
+                  <View
+                    style={[s.heatmapBarBg, { backgroundColor: dt.surfaceLow }]}
                   >
-                    {badge.label}
+                    <View
+                      style={[
+                        s.heatmapBarFill,
+                        {
+                          height: `${Math.max(pct, 4)}%` as DimensionValue,
+                          backgroundColor: barColor,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    style={[s.heatmapDayLabel, { color: dt.textSecondary }]}
+                  >
+                    {DAYS_SHORT[index]}
                   </Text>
                 </View>
               );
@@ -426,353 +623,511 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Past Seasons */}
-        {archives.length > 0 && (
-          <View
-            style={[styles.seasonsCard, { backgroundColor: colors.surface }]}
-          >
-            <Text style={[styles.seasonsTitle, { color: colors.text }]}>
-              📊 Past Seasons ({archives.length})
-            </Text>
-            <View style={styles.seasonsList}>
-              {archives.slice(0, 5).map((archive, index) => (
-                <View key={archive.id} style={styles.seasonRow}>
-                  <View style={styles.seasonLeft}>
-                    <Text style={[styles.seasonLabel, { color: colors.text }]}>
-                      S{archives.length - index}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.seasonDate,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {new Date(archive.id).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.seasonRight}>
-                    <Text
-                      style={[styles.seasonHours, { color: colors.primary }]}
-                    >
-                      {minutesToHrs(archive.total)}
-                    </Text>
-                    {archive.rank > 0 && archive.rank <= 3 ? (
-                      <Text style={styles.seasonRank}>
-                        {["🥇", "🥈", "🥉"][archive.rank - 1]}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Archive Button */}
-        <Pressable
-          onPress={handleArchiveWeek}
-          style={[styles.archiveBtn, { backgroundColor: colors.primary }]}
+        {/* ─── Edit Profile Fields ─── */}
+        <View
+          style={[
+            s.fieldsCard,
+            { backgroundColor: dt.surfaceCard, shadowColor: dt.shadow },
+          ]}
         >
-          <Text style={styles.archiveBtnEmoji}>📦</Text>
-          <Text style={styles.archiveBtnText}>Archive This Week</Text>
-        </Pressable>
+          <Text style={[s.fieldsCardTitle, { color: dt.text }]}>
+            Profile Details
+          </Text>
+          {renderField(
+            "Full Name",
+            profile.name,
+            "name",
+            "Enter your name",
+            (text) => {
+              setProfile({ name: text });
+              syncProfileToSupabase({ name: text });
+            },
+          )}
+          {renderField(
+            "Faculty",
+            profile.faculty,
+            "faculty",
+            "e.g., Sciences",
+            (text) => {
+              setProfile({ faculty: text });
+              syncProfileToSupabase({ faculty: text });
+            },
+          )}
+          {renderField(
+            "Department",
+            profile.department,
+            "department",
+            "e.g., Chemistry",
+            (text) => {
+              setProfile({ department: text });
+              syncProfileToSupabase({ department: text });
+            },
+          )}
+          {renderField(
+            "Level",
+            profile.level,
+            "level",
+            "e.g., 200L",
+            (text) => {
+              setProfile({ level: text });
+              syncProfileToSupabase({ level: text });
+            },
+          )}
+          {renderField(
+            "Study Buddy",
+            profile.accountabilityPartner,
+            "partner",
+            "Your accountability partner",
+            (text) => {
+              setProfile({ accountabilityPartner: text });
+              syncProfileToSupabase({ accountabilityPartner: text });
+            },
+          )}
+        </View>
+
+        {/* Bottom spacer */}
+        <View style={{ height: 100 }} />
       </ScrollView>
 
       <AchievementsModal
         visible={achievementsVisible}
         onClose={() => setAchievementsVisible(false)}
       />
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        icon={alertConfig.icon}
+        buttons={alertConfig.buttons}
+        onDismiss={dismissAlert}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+/* ─── Styles (split to avoid TS inference limit) ─── */
+
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
+    paddingHorizontal: 20,
   },
 
   // Header
-  headerTop: {
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 20,
-    paddingHorizontal: 4,
+    alignItems: "center",
+    marginBottom: 24,
   },
-  brand: {
-    fontSize: 24,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 13,
-    marginTop: 2,
-    fontWeight: "500",
-  },
-  rankBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  rankBadgeText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  headerRight: {
+  headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
-  signOutButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  signOutButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // Profile Card
-  profileCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  avatarSection: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  headerAvatarWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
+    backgroundColor: "rgba(154, 195, 255, 0.15)",
+    position: "relative",
   },
-  avatarEmoji: {
-    fontSize: 32,
-    fontWeight: "800",
-  },
-  avatarName: {
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-  avatarMeta: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginTop: 4,
-  },
-  fieldsSection: {
-    gap: 16,
-  },
-  fieldRow: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontSize: 12,
+  headerAvatarText: {
+    fontSize: 18,
     fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  input: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 14,
-    fontSize: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-
-  // Stats Row
-  statsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 20,
+  headerAvatarBadge: {
+    position: "absolute",
+    bottom: -3,
+    right: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  statValue: {
+  headerAvatarBadgeIcon: {
+    fontSize: 8,
+  },
+  headerTitle: {
     fontSize: 22,
     fontWeight: "800",
     letterSpacing: -0.5,
   },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
+  signOutBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  signOutBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
 
-  // Badges Card
-  badgesCard: {
-    borderRadius: 24,
-    padding: 20,
+  // Hero
+  heroSection: {
+    marginBottom: 28,
+  },
+  heroLeft: {
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
+  },
+  heroLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  heroName: {
+    fontSize: 34,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    marginBottom: 6,
+  },
+  heroDesc: {
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
+  },
+  heroStats: {
+    flexDirection: "row",
+    gap: 14,
+  },
+  heroStatCard: {
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    borderRadius: 18,
+    alignItems: "center",
+    minWidth: 110,
+  },
+  heroStatValue: {
+    fontSize: 30,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  heroStatLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginTop: 4,
+  },
+});
+
+const bentoStyles = StyleSheet.create({
+  // Bento Grid
+  bentoGrid: {
+    gap: 16,
+    marginBottom: 20,
+  },
+  bentoLeft: {
+    gap: 16,
+  },
+  bentoRight: {
+    gap: 16,
+  },
+  bentoCard: {
+    borderRadius: 20,
+    padding: 22,
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.06,
-    shadowRadius: 12,
+    shadowRadius: 24,
     elevation: 5,
   },
-  badgesHeader: {
+  bentoCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  badgesHeaderRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  badgesTitle: {
-    fontSize: 18,
+  bentoCardTitle: {
+    fontSize: 19,
     fontWeight: "800",
     letterSpacing: -0.3,
   },
-  badgesCount: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  badgesCountText: {
-    fontSize: 12,
+  bentoCardLink: {
+    fontSize: 13,
     fontWeight: "700",
   },
-  achievementsButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 12,
-  },
-  achievementsButtonText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
+
+  // Badges
   badgesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    justifyContent: "space-between",
+    gap: 16,
   },
   badgeItem: {
-    flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    gap: 6,
+    width: "30%",
   },
-  badgeIcon: {
-    fontSize: 16,
+  badgeCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
   },
-  badgeLabel: {
+  badgeEmoji: {
+    fontSize: 26,
+  },
+  badgeName: {
     fontSize: 12,
     fontWeight: "700",
+    textAlign: "center",
+  },
+  badgeLevel: {
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginTop: 2,
   },
 
-  // Seasons Card
-  seasonsCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 5,
+  // XP Card
+  xpCard: {
+    borderRadius: 20,
+    padding: 22,
   },
-  seasonsTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-    marginBottom: 16,
-  },
-  seasonsList: {
-    gap: 12,
-  },
-  seasonRow: {
+  xpHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
+    marginBottom: 12,
   },
-  seasonLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  seasonLabel: {
-    fontSize: 16,
-    fontWeight: "800",
-    width: 36,
-  },
-  seasonDate: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  seasonRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  seasonHours: {
+  xpHeaderTitle: {
     fontSize: 15,
     fontWeight: "700",
   },
-  seasonRank: {
-    fontSize: 20,
-  },
-
-  // Archive Button
-  archiveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 20,
-    borderRadius: 20,
-    shadowColor: "#8b5cf6",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  archiveBtnEmoji: {
-    fontSize: 20,
-  },
-  archiveBtnText: {
-    color: "#fff",
-    fontSize: 17,
+  xpHeaderValue: {
+    fontSize: 14,
     fontWeight: "800",
-    letterSpacing: 0.5,
+  },
+  xpBarBg: {
+    height: 14,
+    borderRadius: 7,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  xpBarFill: {
+    height: "100%",
+    borderRadius: 7,
+  },
+  xpSubtext: {
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
   },
 });
+
+const archiveStyles = StyleSheet.create({
+  // Archive Vault
+  archiveGlow: {
+    position: "absolute",
+    top: -50,
+    right: -50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  archiveList: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  archiveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 10,
+    borderRadius: 14,
+  },
+  archiveIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  archiveIconEmoji: {
+    fontSize: 18,
+  },
+  archiveInfo: {
+    flex: 1,
+  },
+  archiveTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  archiveDate: {
+    fontSize: 10,
+    fontWeight: "500",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
+  archiveMedal: {
+    fontSize: 18,
+  },
+  archiveEmpty: {
+    fontSize: 13,
+    fontWeight: "500",
+    textAlign: "center",
+    paddingVertical: 16,
+  },
+  archiveButton: {
+    paddingVertical: 14,
+    borderRadius: 28,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  archiveButtonText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+
+  // Customize Card
+  customizeCard: {
+    borderRadius: 20,
+    padding: 22,
+  },
+  customizeEmoji: {
+    fontSize: 32,
+    marginBottom: 12,
+  },
+  customizeTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+  customizeDesc: {
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 19,
+    marginBottom: 18,
+  },
+  customizeBtn: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+    borderRadius: 28,
+    alignSelf: "flex-start",
+  },
+  customizeBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+});
+
+const detailStyles = StyleSheet.create({
+  // Heatmap
+  heatmapCard: {
+    borderRadius: 20,
+    padding: 22,
+    marginBottom: 20,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+  heatmapTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    marginBottom: 20,
+  },
+  heatmapBars: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 6,
+    height: 120,
+  },
+  heatmapBarCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  heatmapBarBg: {
+    flex: 1,
+    width: "100%",
+    borderRadius: 999,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  heatmapBarFill: {
+    width: "100%",
+    borderRadius: 999,
+  },
+  heatmapDayLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginTop: 8,
+  },
+
+  // Fields Card
+  fieldsCard: {
+    borderRadius: 20,
+    padding: 22,
+    marginBottom: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+  fieldsCardTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    marginBottom: 20,
+  },
+  fieldRow: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  fieldInput: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  fieldValueRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  fieldValue: {
+    fontSize: 15,
+    fontWeight: "500",
+    flex: 1,
+  },
+  fieldEditIcon: {
+    fontSize: 14,
+    marginLeft: 8,
+  },
+});
+
+const s = {
+  ...baseStyles,
+  ...bentoStyles,
+  ...archiveStyles,
+  ...detailStyles,
+};

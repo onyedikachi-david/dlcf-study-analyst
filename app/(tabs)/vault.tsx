@@ -1,10 +1,11 @@
+import CustomAlert, { type AlertButton } from "@/components/CustomAlert";
 import { useAppStore } from "@/src/stores";
-import { Colors } from "@/src/theme/colors";
-import React, { memo, useCallback, useState } from "react";
+import { minutesToHrs } from "@/src/utils/time";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -24,11 +25,535 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+/* ═══════════════════════════════════════════════════
+   DESIGN TOKENS TYPE
+   ═══════════════════════════════════════════════════ */
+
+interface DesignTokens {
+  bg: string;
+  surfaceLow: string;
+  surfaceMid: string;
+  surfaceHigh: string;
+  surfaceHighest: string;
+  surfaceCard: string;
+  primary: string;
+  primaryContainer: string;
+  onPrimary: string;
+  secondary: string;
+  secondaryContainer: string;
+  onSecondary: string;
+  tertiary: string;
+  tertiaryContainer: string;
+  onTertiaryContainer: string;
+  text: string;
+  textSecondary: string;
+  outline: string;
+  outlineVariant: string;
+  error: string;
+  shadow: string;
+}
+
+/* ═══════════════════════════════════════════════════
+   STYLES — Declared before components
+   ═══════════════════════════════════════════════════ */
+
+const baseStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 120,
+  },
+
+  /* Header */
+  header: {
+    marginBottom: 24,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    marginBottom: 6,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
+    maxWidth: 280,
+  },
+  headerStats: {
+    alignItems: "flex-end",
+  },
+  headerStatValue: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  headerStatLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  /* Search Bar */
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  searchIcon: {
+    fontSize: 18,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    padding: 0,
+  },
+});
+
+const heroStyles = StyleSheet.create({
+  section: {
+    marginBottom: 28,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  sectionTitleAccent: {
+    width: 4,
+    height: 24,
+    borderRadius: 2,
+    marginRight: 10,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+  },
+  sectionLink: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  /* Bento Grid */
+  bentoRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  heroCard: {
+    flex: 2,
+    borderRadius: 22,
+    padding: 22,
+    minHeight: 200,
+    justifyContent: "space-between",
+    overflow: "hidden",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  heroCardDecor: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    fontSize: 72,
+    opacity: 0.08,
+  },
+  heroTagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  heroTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  heroTagText: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  heroDate: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginBottom: 6,
+  },
+  heroDesc: {
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  heroActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  heroBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  heroBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#fff",
+  },
+  heroIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroIconBtnText: {
+    fontSize: 16,
+  },
+
+  /* Side Card */
+  sideCard: {
+    flex: 1,
+    borderRadius: 22,
+    padding: 18,
+    justifyContent: "space-between",
+    borderWidth: 1,
+  },
+  sideCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  sideCardIconText: {
+    fontSize: 20,
+  },
+  sideCardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    marginBottom: 4,
+  },
+  sideCardDesc: {
+    fontSize: 11,
+    fontWeight: "500",
+    lineHeight: 16,
+  },
+  sideCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+  },
+  sideCardFooterLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  sideCardFooterIcon: {
+    fontSize: 16,
+  },
+});
+
+const inputStyles = StyleSheet.create({
+  card: {
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 28,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  input: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    fontSize: 14,
+    fontWeight: "500",
+    minHeight: 90,
+    textAlignVertical: "top",
+  },
+  addBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  addBtnText: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
+  },
+  charCount: {
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 8,
+    textAlign: "right",
+  },
+});
+
+const storageStyles = StyleSheet.create({
+  card: {
+    borderRadius: 22,
+    padding: 22,
+    marginBottom: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    overflow: "hidden",
+  },
+  cardLeft: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+  cardDesc: {
+    fontSize: 13,
+    fontWeight: "500",
+    marginBottom: 14,
+    opacity: 0.85,
+  },
+  cardBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+  },
+  cardBtnText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  cardDecor: {
+    fontSize: 56,
+    opacity: 0.15,
+    marginLeft: 12,
+  },
+});
+
+const factStyles = StyleSheet.create({
+  section: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  grid: {
+    gap: 10,
+  },
+  factCard: {
+    borderRadius: 18,
+    padding: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  factCardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 10,
+  },
+  factIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  factIconText: {
+    fontSize: 16,
+  },
+  factMeta: {
+    flex: 1,
+  },
+  factTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  factDate: {
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  factText: {
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  factFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  factTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  factTagText: {
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  factDeleteBtn: {
+    padding: 4,
+  },
+  factDeleteText: {
+    fontSize: 14,
+  },
+
+  /* Empty State */
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  emptyIconText: {
+    fontSize: 36,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+
+  /* Swipe hint */
+  hint: {
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "500",
+    paddingVertical: 8,
+  },
+});
+
+const swipeStyles = StyleSheet.create({
+  container: {
+    position: "relative",
+    marginBottom: 10,
+  },
+  deleteBg: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 100,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 18,
+  },
+  deleteText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+});
+
+/* ═══════════════════════════════════════════════════
+   COMPONENTS
+   ═══════════════════════════════════════════════════ */
+
 interface FactItemProps {
   fact: string;
   index: number;
   totalCount: number;
   onDelete: (index: number) => void;
+  onDeleteRequest: (index: number) => void;
+  dt: DesignTokens;
 }
 
 const FactItem = memo(function FactItem({
@@ -36,20 +561,27 @@ const FactItem = memo(function FactItem({
   index,
   totalCount,
   onDelete,
+  onDeleteRequest,
+  dt,
 }: FactItemProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const colors = isDark ? Colors.dark : Colors.light;
-
   const translateX = useSharedValue(0);
   const factNumber = totalCount - index;
 
+  // Cycle through icon colors
+  const iconColors = [
+    { bg: dt.primaryContainer + "40", text: dt.primary },
+    { bg: dt.secondaryContainer + "50", text: dt.secondary },
+    { bg: dt.tertiaryContainer + "60", text: dt.tertiary },
+    { bg: dt.surfaceHigh, text: dt.textSecondary },
+  ];
+  const iconStyle = iconColors[index % iconColors.length];
+
+  const iconEmojis = ["📄", "💡", "🧠", "📝", "📚", "✨", "🔬", "📖"];
+  const iconEmoji = iconEmojis[index % iconEmojis.length];
+
   const handleDelete = useCallback(() => {
-    Alert.alert("Delete Fact", "Are you sure you want to delete this fact?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => onDelete(index) },
-    ]);
-  }, [index, onDelete]);
+    onDeleteRequest(index);
+  }, [index, onDeleteRequest]);
 
   const panGesture = Gesture.Pan()
     .activeOffsetX(-10)
@@ -70,45 +602,142 @@ const FactItem = memo(function FactItem({
   }));
 
   return (
-    <View style={styles.factItemContainer}>
-      <View
-        style={[styles.deleteBackground, { backgroundColor: colors.error }]}
-      >
-        <Text style={styles.deleteText}>Delete</Text>
+    <View style={swipeStyles.container}>
+      <View style={[swipeStyles.deleteBg, { backgroundColor: dt.error }]}>
+        <Text style={swipeStyles.deleteText}>Delete</Text>
       </View>
       <GestureDetector gesture={panGesture}>
         <Animated.View
           style={[
-            styles.factItem,
-            { backgroundColor: colors.surface },
+            factStyles.factCard,
+            { backgroundColor: dt.surfaceCard, shadowColor: dt.shadow },
             animatedStyle,
           ]}
         >
-          <View
-            style={[styles.factNumber, { backgroundColor: colors.primary }]}
-          >
-            <Text style={styles.factNumberText}>{factNumber}</Text>
+          <View style={factStyles.factCardHeader}>
+            <View
+              style={[factStyles.factIcon, { backgroundColor: iconStyle.bg }]}
+            >
+              <Text style={factStyles.factIconText}>{iconEmoji}</Text>
+            </View>
+            <View style={factStyles.factMeta}>
+              <Text
+                style={[factStyles.factTitle, { color: dt.text }]}
+                numberOfLines={1}
+              >
+                Fact #{factNumber}
+              </Text>
+              <Text style={[factStyles.factDate, { color: dt.textSecondary }]}>
+                Knowledge Vault
+              </Text>
+            </View>
           </View>
+
           <Text
-            style={[styles.factText, { color: colors.text }]}
+            style={[factStyles.factText, { color: dt.text }]}
             numberOfLines={3}
           >
             {fact}
           </Text>
+
+          <View style={factStyles.factFooter}>
+            <View
+              style={[factStyles.factTag, { backgroundColor: dt.surfaceLow }]}
+            >
+              <Text style={[factStyles.factTagText, { color: dt.outline }]}>
+                Saved
+              </Text>
+            </View>
+            <Pressable
+              onPress={handleDelete}
+              style={factStyles.factDeleteBtn}
+              hitSlop={8}
+            >
+              <Text style={factStyles.factDeleteText}>⋮</Text>
+            </Pressable>
+          </View>
         </Animated.View>
       </GestureDetector>
     </View>
   );
 });
 
+/* ═══════════════════════════════════════════════════
+   MAIN SCREEN
+   ═══════════════════════════════════════════════════ */
+
 export default function VaultScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
-  const colors = isDark ? Colors.dark : Colors.light;
 
-  const { facts, addFact, removeFact } = useAppStore();
+  const { facts, addFact, removeFact, cumulativeMinutes } = useAppStore();
   const [newFact, setNewFact] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "recent">("all");
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    factContent?: string;
+    icon?: string;
+    buttons?: AlertButton[];
+  }>({ visible: false, title: "" });
+
+  const dismissAlert = useCallback(() => {
+    setAlertConfig((prev) => ({ ...prev, visible: false }));
+  }, []);
+
+  // Design tokens
+  const dt = useMemo(
+    () =>
+      ({
+        bg: isDark ? "#0f0f1a" : "#f6fafe",
+        surfaceLow: isDark ? "#1a1a2e" : "#eff4f9",
+        surfaceMid: isDark ? "#1e1e32" : "#e8eff4",
+        surfaceHigh: isDark ? "#2a2a45" : "#e1e9f0",
+        surfaceHighest: isDark ? "#333352" : "#dae4eb",
+        surfaceCard: isDark ? "#1e1e32" : "#ffffff",
+        primary: isDark ? "#7fb6ff" : "#0060ad",
+        primaryContainer: isDark ? "#2a4a7a" : "#9ac3ff",
+        onPrimary: isDark ? "#001d3d" : "#f8f8ff",
+        secondary: isDark ? "#4ecdc4" : "#146a65",
+        secondaryContainer: isDark ? "#1a4a47" : "#a7f3ec",
+        onSecondary: isDark ? "#003330" : "#e1fffb",
+        tertiary: isDark ? "#eec540" : "#745c00",
+        tertiaryContainer: isDark ? "#5a4800" : "#fdd34d",
+        onTertiaryContainer: isDark ? "#fdd34d" : "#5c4900",
+        text: isDark ? "#f1f5f9" : "#2a3439",
+        textSecondary: isDark ? "#94a3b8" : "#576067",
+        outline: isDark ? "#64748b" : "#727c82",
+        outlineVariant: isDark ? "#475569" : "#a9b3ba",
+        error: isDark ? "#f87171" : "#ac3434",
+        shadow: isDark ? "rgba(0,0,0,0.4)" : "rgba(42,52,57,0.06)",
+      }) as DesignTokens,
+    [isDark],
+  );
+
+  // Filtered facts
+  const filteredFacts = useMemo(() => {
+    let result = [...facts];
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((f) => f.toLowerCase().includes(query));
+    }
+    if (activeFilter === "recent") {
+      result = result.slice(0, 5);
+    }
+    return result;
+  }, [facts, searchQuery, activeFilter]);
+
+  // Stats
+  const totalStudyHours = minutesToHrs(cumulativeMinutes);
+  const storagePercent = Math.min((facts.length / 50) * 100, 100);
+  const isFactMaster = facts.length >= 10;
+
+  // Most recent fact for hero
+  const mostRecentFact = facts.length > 0 ? facts[0] : null;
+  const secondFact = facts.length > 1 ? facts[1] : null;
 
   const handleAddFact = useCallback(() => {
     const trimmed = newFact.trim();
@@ -118,383 +747,503 @@ export default function VaultScreen() {
     if (success) {
       setNewFact("");
     } else {
-      Alert.alert("Vault Full", "You can only save up to 50 facts.");
+      setAlertConfig({
+        visible: true,
+        title: "Vault Full",
+        message: "You can only save up to 50 facts.",
+        icon: "🗄️",
+        buttons: [{ text: "Got it", style: "default" }],
+      });
     }
   }, [newFact, addFact]);
 
+  const handleViewFact = useCallback((fact: string) => {
+    setAlertConfig({
+      visible: true,
+      title: "Fact from Vault",
+      factContent: fact,
+      icon: "📜",
+      buttons: [{ text: "Close", style: "cancel" }],
+    });
+  }, []);
+
+  const handleShareFact = useCallback(async (fact: string) => {
+    try {
+      await Share.share({
+        message: `📚 Fact from my Study Vault:\n\n"${fact}"\n\n— Shared via DLCF Study Analyst`,
+      });
+    } catch (error) {
+      // User cancelled or share failed silently
+    }
+  }, []);
+
   const handleDelete = useCallback(
     (index: number) => {
-      removeFact(index);
+      const actualIndex = facts.indexOf(filteredFacts[index]);
+      setAlertConfig({
+        visible: true,
+        title: "Delete Fact",
+        message: "Are you sure you want to delete this fact?",
+        icon: "🗑️",
+        buttons: [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => {
+              if (actualIndex !== -1) removeFact(actualIndex);
+            },
+          },
+        ],
+      });
     },
-    [removeFact],
+    [facts, filteredFacts, removeFact],
   );
-
-  const isFactMaster = facts.length >= 10;
 
   const renderItem = useCallback(
     ({ item, index }: { item: string; index: number }) => (
       <FactItem
         fact={item}
         index={index}
-        totalCount={facts.length}
+        totalCount={filteredFacts.length}
         onDelete={handleDelete}
+        onDeleteRequest={handleDelete}
+        dt={dt}
       />
     ),
-    [facts.length, handleDelete],
+    [filteredFacts.length, handleDelete, dt],
   );
 
   return (
     <GestureHandlerRootView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[baseStyles.container, { backgroundColor: dt.bg }]}
     >
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={[styles.brand, { color: colors.primary }]}>
-              🧠 Fact Vault
-            </Text>
-            <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-              Your high-yield knowledge bank
-            </Text>
-          </View>
-          <View style={styles.vaultStats}>
-            <Text style={[styles.vaultStatValue, { color: colors.text }]}>
-              {facts.length}
-            </Text>
-            <Text
-              style={[styles.vaultStatLabel, { color: colors.textSecondary }]}
-            >
-              /50 facts
-            </Text>
-          </View>
-        </View>
+      <FlatList
+        data={filteredFacts}
+        renderItem={renderItem}
+        keyExtractor={(_: string, index: number) => `fact-${index}`}
+        contentContainerStyle={[
+          baseStyles.scrollContent,
+          { paddingTop: insets.top + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <>
+            {/* ── Header ── */}
+            <View style={baseStyles.header}>
+              <View style={baseStyles.headerRow}>
+                <View>
+                  <Text style={[baseStyles.headerTitle, { color: dt.text }]}>
+                    Archive Vault
+                  </Text>
+                  <Text
+                    style={[
+                      baseStyles.headerSubtitle,
+                      { color: dt.textSecondary },
+                    ]}
+                  >
+                    Retrieve your past knowledge. Every fact preserved in
+                    ethereal clarity.
+                  </Text>
+                </View>
+                <View style={baseStyles.headerStats}>
+                  <Text
+                    style={[baseStyles.headerStatValue, { color: dt.primary }]}
+                  >
+                    {facts.length}
+                  </Text>
+                  <Text
+                    style={[
+                      baseStyles.headerStatLabel,
+                      { color: dt.textSecondary },
+                    ]}
+                  >
+                    /50 facts
+                  </Text>
+                </View>
+              </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View
-            style={[styles.progressBar, { backgroundColor: colors.background }]}
-          >
+              {/* Search Bar */}
+              <View
+                style={[
+                  baseStyles.searchContainer,
+                  { backgroundColor: dt.surfaceLow },
+                ]}
+              >
+                <Text style={baseStyles.searchIcon}>🔍</Text>
+                <TextInput
+                  style={[baseStyles.searchInput, { color: dt.text }]}
+                  placeholder="Search your vault..."
+                  placeholderTextColor={dt.outlineVariant}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+            </View>
+
+            {/* ── Recently Archived (Hero Bento) ── */}
+            {mostRecentFact && (
+              <View style={heroStyles.section}>
+                <View style={heroStyles.sectionHeader}>
+                  <View style={heroStyles.sectionTitleRow}>
+                    <View
+                      style={[
+                        heroStyles.sectionTitleAccent,
+                        { backgroundColor: dt.secondary },
+                      ]}
+                    />
+                    <Text style={[heroStyles.sectionTitle, { color: dt.text }]}>
+                      Recently Archived
+                    </Text>
+                  </View>
+                  <Pressable>
+                    <Text
+                      style={[heroStyles.sectionLink, { color: dt.primary }]}
+                    >
+                      View All
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <View style={heroStyles.bentoRow}>
+                  {/* Hero Card (Most Recent) */}
+                  <View
+                    style={[
+                      heroStyles.heroCard,
+                      {
+                        backgroundColor: dt.surfaceCard,
+                        shadowColor: dt.shadow,
+                      },
+                    ]}
+                  >
+                    <Text style={heroStyles.heroCardDecor}>🏛️</Text>
+                    <View>
+                      <View style={heroStyles.heroTagRow}>
+                        <View
+                          style={[
+                            heroStyles.heroTag,
+                            { backgroundColor: dt.primaryContainer + "40" },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              heroStyles.heroTagText,
+                              { color: dt.primary },
+                            ]}
+                          >
+                            LATEST FACT
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            heroStyles.heroDate,
+                            { color: dt.textSecondary },
+                          ]}
+                        >
+                          Just added
+                        </Text>
+                      </View>
+                      <Text
+                        style={[heroStyles.heroTitle, { color: dt.text }]}
+                        numberOfLines={2}
+                      >
+                        {mostRecentFact.length > 50
+                          ? mostRecentFact.substring(0, 50) + "..."
+                          : mostRecentFact}
+                      </Text>
+                      <Text
+                        style={[
+                          heroStyles.heroDesc,
+                          { color: dt.textSecondary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {mostRecentFact}
+                      </Text>
+                    </View>
+                    <View style={heroStyles.heroActions}>
+                      <Pressable
+                        onPress={() => handleViewFact(mostRecentFact)}
+                        style={[
+                          heroStyles.heroBtn,
+                          { backgroundColor: dt.primary },
+                        ]}
+                      >
+                        <Text style={heroStyles.heroBtnText}>View Fact</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleShareFact(mostRecentFact)}
+                        style={[
+                          heroStyles.heroIconBtn,
+                          { backgroundColor: dt.surfaceHigh },
+                        ]}
+                      >
+                        <Text style={heroStyles.heroIconBtnText}>📤</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Side Card (Second Fact or Placeholder) */}
+                  <View
+                    style={[
+                      heroStyles.sideCard,
+                      {
+                        backgroundColor: dt.secondary + "08",
+                        borderColor: dt.secondary + "15",
+                      },
+                    ]}
+                  >
+                    <View>
+                      <View
+                        style={[
+                          heroStyles.sideCardIcon,
+                          { backgroundColor: dt.secondaryContainer },
+                        ]}
+                      >
+                        <Text style={heroStyles.sideCardIconText}>🧠</Text>
+                      </View>
+                      <Text
+                        style={[heroStyles.sideCardTitle, { color: dt.text }]}
+                        numberOfLines={2}
+                      >
+                        {secondFact
+                          ? secondFact.length > 30
+                            ? secondFact.substring(0, 30) + "..."
+                            : secondFact
+                          : "Knowledge Base"}
+                      </Text>
+                      <Text
+                        style={[
+                          heroStyles.sideCardDesc,
+                          { color: dt.textSecondary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {secondFact
+                          ? secondFact.substring(0, 60)
+                          : "Add more facts to build your study archive."}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        heroStyles.sideCardFooter,
+                        { borderTopColor: dt.secondary + "15" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          heroStyles.sideCardFooterLabel,
+                          { color: dt.secondary },
+                        ]}
+                      >
+                        STUDY ASSET
+                      </Text>
+                      <Text
+                        style={[
+                          heroStyles.sideCardFooterIcon,
+                          { color: dt.secondary },
+                        ]}
+                      >
+                        →
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* ── Add New Fact ── */}
             <View
               style={[
-                styles.progressFill,
-                {
-                  backgroundColor: isFactMaster
-                    ? colors.success
-                    : colors.primary,
-                  width: `${(facts.length / 50) * 100}%`,
-                },
-              ]}
-            />
-          </View>
-          {isFactMaster && (
-            <View
-              style={[
-                styles.masterBadge,
-                { backgroundColor: colors.success + "20" },
+                inputStyles.card,
+                { backgroundColor: dt.surfaceCard, shadowColor: dt.shadow },
               ]}
             >
-              <Text style={[styles.masterBadgeText, { color: colors.success }]}>
-                🏆 Fact Master!
+              <Text style={[inputStyles.label, { color: dt.textSecondary }]}>
+                ✨ Add New Fact
+              </Text>
+              <View style={inputStyles.row}>
+                <TextInput
+                  style={[
+                    inputStyles.input,
+                    { backgroundColor: dt.surfaceLow, color: dt.text },
+                  ]}
+                  value={newFact}
+                  onChangeText={setNewFact}
+                  placeholder="Type a key fact to remember..."
+                  placeholderTextColor={dt.outlineVariant}
+                  onSubmitEditing={handleAddFact}
+                  returnKeyType="done"
+                  multiline
+                  maxLength={200}
+                />
+                <Pressable
+                  onPress={handleAddFact}
+                  disabled={!newFact.trim()}
+                  style={[
+                    inputStyles.addBtn,
+                    { backgroundColor: dt.primary, shadowColor: dt.primary },
+                    !newFact.trim() && { opacity: 0.5 },
+                  ]}
+                >
+                  <Text style={inputStyles.addBtnText}>+</Text>
+                </Pressable>
+              </View>
+              <Text
+                style={[inputStyles.charCount, { color: dt.textSecondary }]}
+              >
+                {newFact.length}/200
               </Text>
             </View>
-          )}
-        </View>
-      </View>
 
-      {/* Input Card */}
-      <View style={[styles.inputCard, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-          ✨ Add New Fact
-        </Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[
-              styles.input,
-              { backgroundColor: colors.background, color: colors.text },
-            ]}
-            value={newFact}
-            onChangeText={setNewFact}
-            placeholder="Type a key fact to remember..."
-            placeholderTextColor={colors.textSecondary}
-            onSubmitEditing={handleAddFact}
-            returnKeyType="done"
-            multiline
-            maxLength={200}
-          />
-          <Pressable
-            onPress={handleAddFact}
-            disabled={!newFact.trim()}
-            style={[
-              styles.addBtn,
-              { backgroundColor: colors.primary },
-              !newFact.trim() && { opacity: 0.5 },
-            ]}
-          >
-            <Text style={styles.addBtnText}>+</Text>
-          </Pressable>
-        </View>
-        <Text style={[styles.charCount, { color: colors.textSecondary }]}>
-          {newFact.length}/200
-        </Text>
-      </View>
-
-      {/* List */}
-      <View style={styles.listContainer}>
-        {facts.length > 0 ? (
-          <FlatList
-            data={facts}
-            renderItem={renderItem}
-            keyExtractor={(_: string, index: number) => index.toString()}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
-          <View style={styles.emptyState}>
+            {/* ── Storage Card ── */}
             <View
               style={[
-                styles.emptyIconContainer,
-                { backgroundColor: colors.primary + "15" },
+                storageStyles.card,
+                { backgroundColor: dt.tertiaryContainer },
               ]}
             >
-              <Text style={styles.emptyIcon}>🧠</Text>
+              <View style={storageStyles.cardLeft}>
+                <Text
+                  style={[
+                    storageStyles.cardTitle,
+                    { color: dt.onTertiaryContainer },
+                  ]}
+                >
+                  Vault Storage: {Math.round(storagePercent)}% Full
+                </Text>
+                <Text
+                  style={[
+                    storageStyles.cardDesc,
+                    { color: dt.onTertiaryContainer },
+                  ]}
+                >
+                  {`You've saved ${totalStudyHours} worth of study data.`}
+                </Text>
+                {isFactMaster && (
+                  <View
+                    style={[
+                      storageStyles.cardBtn,
+                      { backgroundColor: dt.surfaceCard },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        storageStyles.cardBtnText,
+                        { color: dt.tertiary },
+                      ]}
+                    >
+                      🏆 Fact Master
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={storageStyles.cardDecor}>☁️</Text>
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              Your vault is empty
+
+            {/* ── Browse All Vaults Section Header ── */}
+            <View style={factStyles.section}>
+              <View style={factStyles.sectionHeader}>
+                <Text style={[factStyles.sectionTitle, { color: dt.text }]}>
+                  Browse All Facts
+                </Text>
+                <View style={factStyles.filterRow}>
+                  <Pressable
+                    onPress={() => setActiveFilter("all")}
+                    style={[
+                      factStyles.filterPill,
+                      {
+                        backgroundColor:
+                          activeFilter === "all"
+                            ? dt.secondary
+                            : dt.surfaceHigh,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        factStyles.filterPillText,
+                        {
+                          color:
+                            activeFilter === "all"
+                              ? dt.onSecondary
+                              : dt.textSecondary,
+                        },
+                      ]}
+                    >
+                      All
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setActiveFilter("recent")}
+                    style={[
+                      factStyles.filterPill,
+                      {
+                        backgroundColor:
+                          activeFilter === "recent"
+                            ? dt.secondary
+                            : dt.surfaceHigh,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        factStyles.filterPillText,
+                        {
+                          color:
+                            activeFilter === "recent"
+                              ? dt.onSecondary
+                              : dt.textSecondary,
+                        },
+                      ]}
+                    >
+                      Recent
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          <View style={factStyles.emptyState}>
+            <View
+              style={[
+                factStyles.emptyIcon,
+                { backgroundColor: dt.primary + "15" },
+              ]}
+            >
+              <Text style={factStyles.emptyIconText}>🧠</Text>
+            </View>
+            <Text style={[factStyles.emptyTitle, { color: dt.text }]}>
+              {searchQuery ? "No facts found" : "Your vault is empty"}
             </Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Save key facts during study for quick revision later.
+            <Text
+              style={[factStyles.emptySubtitle, { color: dt.textSecondary }]}
+            >
+              {searchQuery
+                ? "Try a different search term"
+                : "Save key facts during study for quick revision later."}
             </Text>
           </View>
-        )}
-      </View>
-
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        ← Swipe left to delete
-      </Text>
+        }
+        ListFooterComponent={
+          filteredFacts.length > 0 ? (
+            <Text style={[factStyles.hint, { color: dt.textSecondary }]}>
+              ← Swipe left to delete
+            </Text>
+          ) : null
+        }
+      />
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        factContent={alertConfig.factContent}
+        icon={alertConfig.icon}
+        buttons={alertConfig.buttons}
+        onDismiss={dismissAlert}
+      />
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-
-  // Header
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  headerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  brand: {
-    fontSize: 24,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 13,
-    marginTop: 2,
-    fontWeight: "500",
-  },
-  vaultStats: {
-    alignItems: "flex-end",
-  },
-  vaultStatValue: {
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
-  vaultStatLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  progressContainer: {
-    gap: 8,
-  },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
-  masterBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  masterBadgeText: {
-    fontSize: 12,
-    fontWeight: "800",
-  },
-
-  // Input Card
-  inputCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
-    fontSize: 15,
-    minHeight: 100,
-    textAlignVertical: "top",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  addBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#8b5cf6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-    alignSelf: "flex-end",
-  },
-  addBtnText: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  charCount: {
-    fontSize: 12,
-    fontWeight: "500",
-    marginTop: 8,
-    textAlign: "right",
-  },
-
-  // List
-  listContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  listContent: {
-    paddingBottom: 20,
-    gap: 10,
-  },
-
-  // Fact Item
-  factItemContainer: {
-    position: "relative",
-  },
-  deleteBackground: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 100,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 16,
-  },
-  deleteText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  factItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    padding: 16,
-    borderRadius: 16,
-    gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  factNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  factNumberText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  factText: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "500",
-  },
-
-  // Empty State
-  emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 40,
-    paddingTop: 60,
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  emptyIcon: {
-    fontSize: 40,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: "center",
-    fontWeight: "500",
-    lineHeight: 20,
-  },
-
-  hint: {
-    textAlign: "center",
-    fontSize: 12,
-    paddingVertical: 12,
-    fontWeight: "500",
-  },
-});
