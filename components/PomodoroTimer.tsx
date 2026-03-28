@@ -1,3 +1,4 @@
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTimerStore, useWeekStore } from "@/src/stores";
 import { DAYS, POMODORO } from "@/src/utils/constants";
 import {
@@ -5,6 +6,7 @@ import {
   formatTimeFromMinutes,
   getCurrentDayIndex,
 } from "@/src/utils/time";
+import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import React, {
   useCallback,
   useEffect,
@@ -62,39 +64,59 @@ interface DesignTokens {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Component Props
+   Types
 ───────────────────────────────────────────────────────── */
+type TimerMode = "focus" | "short" | "long";
+
 interface PomodoroTimerProps {
   visible: boolean;
   onClose: () => void;
 }
 
 /* ─────────────────────────────────────────────────────────
-   Static StyleSheets  (declared BEFORE the component)
+   Static StyleSheets — declared BEFORE component
 ───────────────────────────────────────────────────────── */
 const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  /* ── Header ── */
+  /* Header */
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
-  headerTitleWrap: {
+  headerLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    letterSpacing: -1,
+  accentBar: {
+    width: 4,
+    height: 28,
+    borderRadius: 2,
   },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  muteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   closeBtn: {
     width: 36,
     height: 36,
@@ -102,39 +124,54 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  closeBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
+
+  /* Mode tabs */
+  modeTabs: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 4,
+    gap: 4,
   },
-  /* ── Shared section accent bar ── */
-  accentBar: {
-    width: 4,
-    height: 20,
-    borderRadius: 2,
-    marginRight: 10,
+  modeTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: "center",
   },
-  sectionTitleRow: {
+  modeTabText: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  /* Cycle indicator */
+  cycleRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-  },
-  /* ── Shared pill / chip ── */
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 28,
-    alignSelf: "flex-start",
-  },
-  chipText: {
-    fontSize: 13,
+  cycleLabel: {
+    fontSize: 12,
     fontWeight: "600",
   },
-  /* ── Shared full-width action button ── */
+  cycleDots: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  cycleDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  cycleLongBreakHint: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  /* Shared action button */
   actionBtn: {
     width: "100%",
     height: 56,
@@ -143,11 +180,23 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
   },
   actionBtnText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     color: "#ffffff",
+    letterSpacing: 0.2,
   },
-  /* ── Text-only link button ── */
+  outlineBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+  },
+  outlineBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
   textBtn: {
     paddingVertical: 12,
     alignItems: "center",
@@ -159,13 +208,13 @@ const baseStyles = StyleSheet.create({
 });
 
 const timerStyles = StyleSheet.create({
-  /* ── Setup view ── */
+  /* Setup */
   setupScroll: {
     flex: 1,
   },
   setupScrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 4,
     paddingBottom: 40,
   },
   setupCard: {
@@ -176,25 +225,41 @@ const timerStyles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 10,
+  },
+  sectionAccent: {
+    width: 4,
+    height: 20,
+    borderRadius: 2,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
   subjectInput: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 14,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "500",
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1.5,
   },
   presetsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   presetChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 28,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   presetChipText: {
     fontSize: 13,
@@ -202,28 +267,27 @@ const timerStyles = StyleSheet.create({
   },
   pomodoroCount: {
     textAlign: "center",
-    marginTop: 20,
-    fontSize: 14,
+    marginTop: 16,
+    fontSize: 13,
     fontWeight: "600",
   },
-  /* ── Timer view ── */
+  /* Timer view */
   timerContainer: {
     flex: 1,
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
-  sessionChip: {
+  subjectChip: {
     paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 28,
-    marginBottom: 28,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 8,
+    alignSelf: "center",
   },
-  sessionChipText: {
+  subjectChipText: {
     fontSize: 13,
     fontWeight: "700",
-    letterSpacing: 0.3,
   },
   timerCircleWrap: {
     width: 260,
@@ -234,11 +298,11 @@ const timerStyles = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
     borderWidth: 4,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 32,
+    shadowRadius: 16,
+    elevation: 8,
+    marginBottom: 24,
   },
   timerProgressOverlay: {
     position: "absolute",
@@ -254,54 +318,57 @@ const timerStyles = StyleSheet.create({
     zIndex: 1,
   },
   timerLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    marginTop: 6,
+    marginTop: 4,
     zIndex: 1,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   controlsRow: {
     flexDirection: "row",
-    gap: 14,
-    marginBottom: 24,
+    gap: 12,
+    marginBottom: 16,
     width: "100%",
-    justifyContent: "center",
   },
   controlBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 22,
-    paddingVertical: 16,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 20,
     gap: 8,
     flex: 1,
-    justifyContent: "center",
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  controlIcon: {
-    fontSize: 18,
-  },
+
   controlBtnText: {
     fontSize: 15,
     fontWeight: "700",
   },
-  subjectChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 28,
-    marginBottom: 20,
+  skipBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    gap: 6,
     alignSelf: "center",
+    marginBottom: 8,
   },
-  subjectChipText: {
-    fontSize: 14,
-    fontWeight: "600",
+  skipBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
 });
 
 const promptStyles = StyleSheet.create({
-  /* ── Save prompt view ── */
   promptScroll: {
     flex: 1,
   },
@@ -314,65 +381,75 @@ const promptStyles = StyleSheet.create({
   heroCelebCard: {
     width: "100%",
     borderRadius: 22,
-    padding: 32,
+    padding: 28,
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 20,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 12,
+    elevation: 5,
   },
   heroEmoji: {
     fontSize: 48,
     marginBottom: 12,
   },
   heroTitle: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "800",
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
     textAlign: "center",
     marginBottom: 8,
   },
   heroSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "500",
     textAlign: "center",
     lineHeight: 22,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   minutesValue: {
-    fontSize: 40,
+    fontSize: 48,
     fontWeight: "800",
     letterSpacing: -1,
   },
   minutesLabel: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     marginTop: 2,
-    letterSpacing: 0.3,
+    letterSpacing: 1,
     textTransform: "uppercase",
+  },
+  /* Cycle summary row inside prompt */
+  cycleSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  cycleSummaryText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
   promptActionsWrap: {
     width: "100%",
-    gap: 12,
+    gap: 10,
     marginTop: 4,
-  },
-  outlineBtn: {
-    width: "100%",
-    height: 56,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-  },
-  outlineBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
   },
 });
 
-/* Merge all style sheets into one `s` object */
 const s = { ...baseStyles, ...timerStyles, ...promptStyles };
+
+/* ─────────────────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────────────────── */
+function getDurationForMode(mode: TimerMode): number {
+  if (mode === "focus") return POMODORO.WORK_MINS * 60;
+  if (mode === "short") return POMODORO.BREAK_MINS * 60;
+  return POMODORO.LONG_BREAK_MINS * 60;
+}
 
 /* ─────────────────────────────────────────────────────────
    Component
@@ -415,11 +492,11 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     session,
     startWork,
     startBreak,
+    startLongBreak,
     pause,
     resume,
     stop,
     complete,
-    updateElapsed,
     incrementPomodoroCount,
     reset,
   } = useTimerStore();
@@ -427,15 +504,21 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
 
   /* ── Local state ── */
   const [subject, setSubject] = useState("");
+  const [activeMode, setActiveMode] = useState<TimerMode>("focus");
   const [secondsRemaining, setSecondsRemaining] = useState(
     POMODORO.WORK_MINS * 60,
   );
   const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   /* ── Refs ── */
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appState = useRef(AppState.currentState);
   const backgroundTime = useRef<number>(0);
+  const handleTimerCompleteRef = useRef<() => void>(() => {});
+
+  // Audio player for chime sound
+  const chimePlayer = useAudioPlayer(require("../assets/chime.wav"));
 
   /* ── Animation ── */
   const pulseScale = useSharedValue(1);
@@ -449,17 +532,39 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
       pulseScale.set(
         withRepeat(
           withSequence(
-            withTiming(1.05, { duration: 500 }),
-            withTiming(1, { duration: 500 }),
+            withTiming(1.04, { duration: 600 }),
+            withTiming(1, { duration: 600 }),
           ),
           -1,
           true,
         ),
       );
     } else {
-      pulseScale.set(withTiming(1));
+      pulseScale.set(withTiming(1, { duration: 200 }));
     }
   }, [session?.status, pulseScale]);
+
+  /* ── Sound ── */
+  // Configure audio mode on mount
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+    });
+  }, []);
+
+  const playChime = useCallback(async () => {
+    // Always vibrate regardless of mute (tactile feedback)
+    Vibration.vibrate([0, 120, 80, 120, 80, 200]);
+    if (isMuted) return;
+    try {
+      // Seek to start and play
+      chimePlayer.seekTo(0);
+      chimePlayer.play();
+    } catch {
+      // Silently ignore audio errors (e.g. simulator limitations)
+    }
+  }, [isMuted, chimePlayer]);
 
   /* ── App-state background handling ── */
   useEffect(() => {
@@ -482,7 +587,6 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
         appState.current = nextState;
       },
     );
-
     return () => subscription.remove();
   }, [session?.status]);
 
@@ -492,7 +596,7 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
       intervalRef.current = setInterval(() => {
         setSecondsRemaining((prev) => {
           if (prev <= 1) {
-            handleTimerComplete();
+            handleTimerCompleteRef.current();
             return 0;
           }
           return prev - 1;
@@ -504,7 +608,6 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
         intervalRef.current = null;
       }
     }
-
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -512,36 +615,115 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
     };
   }, [session?.status]);
 
+  /* ── Derived values ── */
+  const pomodoroCount = session?.pomodoroCount ?? 0;
+  // Which dot in the cycle (0-3) is filled
+  const cyclePosition = pomodoroCount % POMODORO.POMODOROS_PER_LONG_BREAK;
+  // How many full cycles completed
+  const fullCycles = Math.floor(
+    pomodoroCount / POMODORO.POMODOROS_PER_LONG_BREAK,
+  );
+  const pomodosUntilLongBreak =
+    POMODORO.POMODOROS_PER_LONG_BREAK - cyclePosition;
+
+  const progress = session
+    ? 1 - secondsRemaining / (session.durationMins * 60)
+    : 0;
+
+  const isRunning = session?.status === "running";
+  const isIdle =
+    !session ||
+    session.status === "completed" ||
+    session.status === "cancelled";
+
+  const isBreak = session?.type === "break";
+  const isLongBreak =
+    isBreak && session?.durationMins === POMODORO.LONG_BREAK_MINS;
+
+  const timerAccentColor = isBreak
+    ? isLongBreak
+      ? dt.tertiary
+      : dt.secondary
+    : dt.primary;
+
   /* ── Callbacks ── */
   const handleTimerComplete = useCallback(() => {
-    Vibration.vibrate([0, 500, 200, 500]);
+    playChime();
     complete();
 
     if (session?.type === "work") {
       incrementPomodoroCount();
       setShowSavePrompt(true);
     } else {
+      // Break ended — reset to focus mode idle
       setSecondsRemaining(POMODORO.WORK_MINS * 60);
+      setActiveMode("focus");
     }
-  }, [session?.type, complete, incrementPomodoroCount]);
+  }, [session?.type, complete, incrementPomodoroCount, playChime]);
 
-  const handleStartWork = useCallback(() => {
-    if (!subject.trim()) return;
-    startWork(subject.trim());
-    setSecondsRemaining(POMODORO.WORK_MINS * 60);
-  }, [subject, startWork]);
+  // Keep the ref always pointing at the latest version of the callback
+  // so the setInterval closure (which never re-registers) always calls
+  // the up-to-date function with fresh state/props.
+  useEffect(() => {
+    handleTimerCompleteRef.current = handleTimerComplete;
+  }, [handleTimerComplete]);
 
-  const handleStartBreak = useCallback(() => {
-    startBreak();
-    setSecondsRemaining(POMODORO.BREAK_MINS * 60);
-    setShowSavePrompt(false);
-  }, [startBreak]);
+  const handleStartSession = useCallback(() => {
+    if (activeMode === "focus") {
+      if (!subject.trim()) return;
+      startWork(subject.trim());
+      setSecondsRemaining(POMODORO.WORK_MINS * 60);
+    } else if (activeMode === "short") {
+      startBreak();
+      setSecondsRemaining(POMODORO.BREAK_MINS * 60);
+      setShowSavePrompt(false);
+    } else {
+      startLongBreak();
+      setSecondsRemaining(POMODORO.LONG_BREAK_MINS * 60);
+      setShowSavePrompt(false);
+    }
+  }, [activeMode, subject, startWork, startBreak, startLongBreak]);
 
-  const handleSkipBreak = useCallback(() => {
-    setSecondsRemaining(POMODORO.WORK_MINS * 60);
-    startWork(session?.subject || subject);
-    setShowSavePrompt(false);
-  }, [session?.subject, subject, startWork]);
+  /* Skip: end current phase and advance to the next logical one */
+  const handleSkip = useCallback(() => {
+    if (session?.type === "work") {
+      // Skip focus → go to appropriate break
+      complete();
+      incrementPomodoroCount();
+      const nextCount = (session.pomodoroCount ?? 0) + 1;
+      const isNextLong = nextCount % POMODORO.POMODOROS_PER_LONG_BREAK === 0;
+      if (isNextLong) {
+        startLongBreak();
+        setSecondsRemaining(POMODORO.LONG_BREAK_MINS * 60);
+        setActiveMode("long");
+      } else {
+        startBreak();
+        setSecondsRemaining(POMODORO.BREAK_MINS * 60);
+        setActiveMode("short");
+      }
+      setShowSavePrompt(false);
+    } else {
+      // Skip break → go back to focus
+      complete();
+      setSecondsRemaining(POMODORO.WORK_MINS * 60);
+      setActiveMode("focus");
+      if (subject.trim()) {
+        startWork(subject.trim());
+      } else {
+        reset();
+      }
+      setShowSavePrompt(false);
+    }
+  }, [
+    session,
+    subject,
+    complete,
+    incrementPomodoroCount,
+    startWork,
+    startBreak,
+    startLongBreak,
+    reset,
+  ]);
 
   const getElapsedMinutes = useCallback(() => {
     if (!session) return 0;
@@ -559,7 +741,6 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
         const now = new Date();
         const stopMins = now.getHours() * 60 + now.getMinutes();
         const startMins = stopMins - elapsedMins;
-
         addTimeToNextAvailableSlot(
           dayName,
           formatTimeFromMinutes(Math.max(0, startMins)),
@@ -568,9 +749,37 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
         );
       }
     }
+
+    // After saving, decide: long break or short break?
+    const nextCount = pomodoroCount;
+    const isNextLong =
+      nextCount > 0 && nextCount % POMODORO.POMODOROS_PER_LONG_BREAK === 0;
+
+    if (isNextLong) {
+      startLongBreak();
+      setSecondsRemaining(POMODORO.LONG_BREAK_MINS * 60);
+      setActiveMode("long");
+    } else {
+      startBreak();
+      setSecondsRemaining(POMODORO.BREAK_MINS * 60);
+      setActiveMode("short");
+    }
     setShowSavePrompt(false);
-    setSecondsRemaining(POMODORO.BREAK_MINS * 60);
-  }, [session, getElapsedMinutes, addTimeToNextAvailableSlot]);
+  }, [
+    session,
+    pomodoroCount,
+    getElapsedMinutes,
+    addTimeToNextAvailableSlot,
+    startBreak,
+    startLongBreak,
+  ]);
+
+  const handleSkipBreakFromPrompt = useCallback(() => {
+    setSecondsRemaining(POMODORO.WORK_MINS * 60);
+    setActiveMode("focus");
+    startWork(session?.subject || subject);
+    setShowSavePrompt(false);
+  }, [session?.subject, subject, startWork]);
 
   const handlePauseResume = useCallback(() => {
     if (session?.status === "running") {
@@ -588,31 +797,87 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
   const handleClose = useCallback(() => {
     reset();
     setSubject("");
+    setActiveMode("focus");
     setSecondsRemaining(POMODORO.WORK_MINS * 60);
     setShowSavePrompt(false);
     onClose();
   }, [reset, onClose]);
 
-  /* ── Derived values ── */
-  const progress = session
-    ? 1 - secondsRemaining / (session.durationMins * 60)
-    : 0;
+  /* Switch mode from tabs while idle */
+  const handleModeTab = useCallback(
+    (mode: TimerMode) => {
+      if (!isIdle) return; // lock tabs while session active
+      setActiveMode(mode);
+      setSecondsRemaining(getDurationForMode(mode));
+    },
+    [isIdle],
+  );
 
-  const isRunning = session?.status === "running";
-  const isPaused = session?.status === "paused";
-  const isIdle =
-    !session ||
-    session.status === "completed" ||
-    session.status === "cancelled";
+  /* ── Mode tab config ── */
+  const modeTabs: { key: TimerMode; label: string; mins: number }[] = [
+    { key: "focus", label: "Focus", mins: POMODORO.WORK_MINS },
+    { key: "short", label: "Short Break", mins: POMODORO.BREAK_MINS },
+    { key: "long", label: "Long Break", mins: POMODORO.LONG_BREAK_MINS },
+  ];
 
-  const isBreak = session?.type === "break";
-  const timerAccentColor = isBreak ? dt.secondary : dt.primary;
-  const timerAccentContainer = isBreak
-    ? dt.secondaryContainer
-    : dt.primaryContainer;
+  /* ── Active accent for current mode/session ── */
+  const activeTabAccent =
+    activeMode === "focus"
+      ? dt.primary
+      : activeMode === "short"
+        ? dt.secondary
+        : dt.tertiary;
 
-  /* ── Header title ── */
-  const headerTitle = isBreak ? "☕ Break Time" : "📚 Study Session";
+  /* Header title */
+  const headerTitle = showSavePrompt
+    ? "Session Done"
+    : isIdle
+      ? activeMode === "focus"
+        ? "Focus"
+        : activeMode === "short"
+          ? "Short Break"
+          : "Long Break"
+      : isBreak
+        ? isLongBreak
+          ? "Long Break"
+          : "Short Break"
+        : "Focus";
+
+  /* ─────────────────────────────────────────────────────
+     CYCLE INDICATOR
+  ───────────────────────────────────────────────────── */
+  const CycleIndicator = () => (
+    <View style={s.cycleRow}>
+      <Text style={[s.cycleLabel, { color: dt.textSecondary }]}>
+        Cycle {fullCycles + 1}
+      </Text>
+      <View style={s.cycleDots}>
+        {Array.from({ length: POMODORO.POMODOROS_PER_LONG_BREAK }).map(
+          (_, i) => (
+            <View
+              key={i}
+              style={[
+                s.cycleDot,
+                {
+                  backgroundColor:
+                    i < cyclePosition
+                      ? dt.primary
+                      : i === cyclePosition && !isIdle && !isBreak
+                        ? dt.primary + "55"
+                        : dt.outlineVariant,
+                },
+              ]}
+            />
+          ),
+        )}
+      </View>
+      <Text style={[s.cycleLongBreakHint, { color: dt.tertiary }]}>
+        {pomodosUntilLongBreak === 1
+          ? "🌙 Long break next!"
+          : `${pomodosUntilLongBreak} until long break`}
+      </Text>
+    </View>
+  );
 
   /* ─────────────────────────────────────────────────
      RENDER
@@ -631,18 +896,93 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
       >
         {/* ── Header ── */}
         <View style={s.header}>
-          <View style={s.headerTitleWrap}>
-            <Text style={[s.title, { color: dt.text }]}>
-              {isIdle && !showSavePrompt ? "🎯 Focus" : headerTitle}
-            </Text>
+          <View style={s.headerLeft}>
+            <View style={[s.accentBar, { backgroundColor: activeTabAccent }]} />
+            <Text style={[s.title, { color: dt.text }]}>{headerTitle}</Text>
           </View>
-          <Pressable
-            onPress={handleClose}
-            style={[s.closeBtn, { backgroundColor: dt.surfaceMid }]}
-          >
-            <Text style={[s.closeBtnText, { color: dt.textSecondary }]}>✕</Text>
-          </Pressable>
+          <View style={s.headerRight}>
+            {/* Mute toggle */}
+            <Pressable
+              onPress={() => setIsMuted((m) => !m)}
+              style={[s.muteBtn, { backgroundColor: dt.surfaceMid }]}
+            >
+              <Ionicons
+                name={isMuted ? "volume-mute" : "notifications"}
+                size={18}
+                color={dt.textSecondary}
+              />
+            </Pressable>
+            {/* Close */}
+            <Pressable
+              onPress={handleClose}
+              style={[s.closeBtn, { backgroundColor: dt.surfaceMid }]}
+            >
+              <Ionicons name="close" size={18} color={dt.textSecondary} />
+            </Pressable>
+          </View>
         </View>
+
+        {/* ── Mode tabs (only when idle) ── */}
+        {!showSavePrompt && (
+          <View style={[s.modeTabs, { backgroundColor: dt.surfaceLow }]}>
+            {modeTabs.map((tab) => {
+              const isActive = isIdle
+                ? activeMode === tab.key
+                : tab.key === "focus"
+                  ? !isBreak
+                  : tab.key === "long"
+                    ? isLongBreak
+                    : isBreak && !isLongBreak;
+              const tabAccent =
+                tab.key === "focus"
+                  ? dt.primary
+                  : tab.key === "short"
+                    ? dt.secondary
+                    : dt.tertiary;
+              return (
+                <Pressable
+                  key={tab.key}
+                  onPress={() => handleModeTab(tab.key)}
+                  style={[
+                    s.modeTab,
+                    {
+                      backgroundColor: isActive
+                        ? dt.surfaceCard
+                        : "transparent",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.modeTabText,
+                      {
+                        color: isActive ? tabAccent : dt.textSecondary,
+                      },
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                  <Text
+                    style={[
+                      s.modeTabText,
+                      {
+                        color: isActive ? tabAccent : dt.outlineVariant,
+                        fontWeight: "500",
+                        fontSize: 11,
+                        marginTop: 2,
+                      },
+                    ]}
+                  >
+                    {tab.mins}m
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Cycle indicator ── */}
+        {!showSavePrompt && <CycleIndicator />}
 
         {/* ══════════════════════════════════════════
             SAVE PROMPT
@@ -653,7 +993,6 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
             contentContainerStyle={s.promptScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* Hero celebration card */}
             <View
               style={[
                 s.heroCelebCard,
@@ -663,7 +1002,12 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
                 },
               ]}
             >
-              <Text style={s.heroEmoji}>🎉</Text>
+              <MaterialCommunityIcons
+                name="party-popper"
+                size={48}
+                color={dt.onTertiaryContainer}
+                style={{ marginBottom: 12 }}
+              />
               <Text style={[s.heroTitle, { color: dt.onTertiaryContainer }]}>
                 Pomodoro Complete!
               </Text>
@@ -674,155 +1018,286 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
                 — keep it up!
               </Text>
 
-              {/* Minutes studied */}
               <Text style={[s.minutesValue, { color: dt.primary }]}>
                 {getElapsedMinutes()}
               </Text>
               <Text style={[s.minutesLabel, { color: dt.textSecondary }]}>
                 minutes studied
               </Text>
+
+              {/* Cycle progress inside prompt */}
+              <View
+                style={[
+                  s.cycleSummaryRow,
+                  { backgroundColor: dt.onTertiaryContainer + "15" },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="food-apple"
+                  size={16}
+                  color={dt.onTertiaryContainer}
+                />
+                <Text
+                  style={[
+                    s.cycleSummaryText,
+                    { color: dt.onTertiaryContainer },
+                  ]}
+                >
+                  {pomodoroCount} pomodoro
+                  {pomodoroCount !== 1 ? "s" : ""} completed
+                  {pomodoroCount % POMODORO.POMODOROS_PER_LONG_BREAK === 0 &&
+                  pomodoroCount > 0
+                    ? " · Long break earned! 🌙"
+                    : ` · ${pomodosUntilLongBreak} until long break`}
+                </Text>
+              </View>
             </View>
 
-            {/* Action buttons */}
             <View style={s.promptActionsWrap}>
               {/* Save & Take Break */}
               <Pressable
                 onPress={handleSaveAndContinue}
-                style={[s.actionBtn, { backgroundColor: dt.secondary }]}
+                style={({ pressed }) => [
+                  s.actionBtn,
+                  {
+                    backgroundColor: dt.secondary,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
               >
-                <Text style={s.actionBtnText}>Save &amp; Take Break</Text>
+                <Text style={s.actionBtnText}>
+                  {pomodoroCount > 0 &&
+                  pomodoroCount % POMODORO.POMODOROS_PER_LONG_BREAK === 0
+                    ? "Save & Take Long Break 🌙"
+                    : "Save & Take Short Break ☕"}
+                </Text>
               </Pressable>
 
-              {/* Skip Break, Continue Studying */}
+              {/* Skip Break */}
               <Pressable
-                onPress={handleSkipBreak}
-                style={[s.outlineBtn, { borderColor: dt.secondary }]}
+                onPress={handleSkipBreakFromPrompt}
+                style={({ pressed }) => [
+                  s.outlineBtn,
+                  {
+                    borderColor: dt.secondary,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
               >
                 <Text style={[s.outlineBtnText, { color: dt.secondary }]}>
-                  Skip Break, Continue Studying
+                  Skip Break, Keep Studying
                 </Text>
               </Pressable>
 
               {/* End Session */}
-              <Pressable onPress={handleClose} style={s.textBtn}>
+              <Pressable
+                onPress={handleClose}
+                style={({ pressed }) => [
+                  s.textBtn,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
                 <Text style={[s.textBtnText, { color: dt.textSecondary }]}>
                   End Session
                 </Text>
               </Pressable>
             </View>
           </ScrollView>
-        ) : /* ══════════════════════════════════════════
-            SETUP VIEW  (idle)
-        ══════════════════════════════════════════ */
-        isIdle ? (
+        ) : isIdle ? (
+          /* ══════════════════════════════════════════
+              SETUP VIEW
+          ══════════════════════════════════════════ */
           <ScrollView
             style={s.setupScroll}
             contentContainerStyle={s.setupScrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Setup card */}
             <View
               style={[
                 s.setupCard,
-                {
-                  backgroundColor: dt.surfaceCard,
-                  shadowColor: dt.shadow,
-                },
+                { backgroundColor: dt.surfaceCard, shadowColor: dt.shadow },
               ]}
             >
-              {/* Section title with accent bar */}
-              <View style={s.sectionTitleRow}>
-                <View style={[s.accentBar, { backgroundColor: dt.primary }]} />
-                <Text style={[s.sectionTitle, { color: dt.text }]}>
-                  What are you studying?
-                </Text>
-              </View>
+              {/* Section title */}
+              {activeMode === "focus" ? (
+                <>
+                  <View style={s.sectionTitleRow}>
+                    <View
+                      style={[s.sectionAccent, { backgroundColor: dt.primary }]}
+                    />
+                    <Text style={[s.sectionTitle, { color: dt.text }]}>
+                      What are you studying?
+                    </Text>
+                  </View>
 
-              {/* Subject input */}
-              <TextInput
-                style={[
-                  s.subjectInput,
-                  {
-                    backgroundColor: dt.surfaceLow,
-                    color: dt.text,
-                    borderColor: dt.outline,
-                  },
-                ]}
-                value={subject}
-                onChangeText={setSubject}
-                placeholder="e.g., CHM101 Stoichiometry"
-                placeholderTextColor={dt.textSecondary}
-                autoFocus
-              />
-
-              {/* Preset chips */}
-              <View style={s.presetsRow}>
-                {["CHM101", "PHY103", "MTH101", "BIO101"].map((code) => (
-                  <Pressable
-                    key={code}
-                    onPress={() => setSubject(code)}
+                  {/* Subject input */}
+                  <TextInput
                     style={[
-                      s.presetChip,
-                      { backgroundColor: dt.primaryContainer },
+                      s.subjectInput,
+                      {
+                        backgroundColor: dt.surfaceLow,
+                        color: dt.text,
+                        borderColor: dt.outline,
+                      },
+                    ]}
+                    value={subject}
+                    onChangeText={setSubject}
+                    placeholder="e.g., CHM101 Stoichiometry"
+                    placeholderTextColor={dt.textSecondary}
+                    autoFocus
+                  />
+
+                  {/* Preset chips */}
+                  <View style={s.presetsRow}>
+                    {["CHM101", "PHY103", "MTH101", "BIO101"].map((code) => (
+                      <Pressable
+                        key={code}
+                        onPress={() => setSubject(code)}
+                        style={[
+                          s.presetChip,
+                          { backgroundColor: dt.primaryContainer },
+                        ]}
+                      >
+                        <Text style={[s.presetChipText, { color: dt.primary }]}>
+                          {code}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : (
+                <View style={{ alignItems: "center", paddingVertical: 16 }}>
+                  <MaterialCommunityIcons
+                    name={activeMode === "short" ? "coffee" : "weather-night"}
+                    size={48}
+                    color={activeMode === "short" ? dt.secondary : dt.tertiary}
+                    style={{ marginBottom: 12 }}
+                  />
+                  <Text
+                    style={[
+                      s.sectionTitle,
+                      { color: dt.text, textAlign: "center", marginBottom: 8 },
                     ]}
                   >
-                    <Text style={[s.presetChipText, { color: dt.primary }]}>
-                      {code}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+                    {activeMode === "short" ? "Short Break" : "Long Break"}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "500",
+                      color: dt.textSecondary,
+                      textAlign: "center",
+                      lineHeight: 20,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {activeMode === "short"
+                      ? `Take a ${POMODORO.BREAK_MINS}-minute breather before your next session.`
+                      : `Great work! Enjoy a ${POMODORO.LONG_BREAK_MINS}-minute long break — you've earned it.`}
+                  </Text>
+                </View>
+              )}
 
               {/* Start button */}
               <Pressable
-                onPress={handleStartWork}
-                disabled={!subject.trim()}
-                style={[
+                onPress={handleStartSession}
+                disabled={activeMode === "focus" && !subject.trim()}
+                style={({ pressed }) => [
                   s.actionBtn,
                   {
-                    backgroundColor: subject.trim()
-                      ? dt.primary
-                      : dt.surfaceHigh,
-                    opacity: subject.trim() ? 1 : 0.5,
+                    backgroundColor:
+                      activeMode === "focus"
+                        ? subject.trim()
+                          ? dt.primary
+                          : dt.surfaceHigh
+                        : activeMode === "short"
+                          ? dt.secondary
+                          : dt.tertiary,
+                    opacity:
+                      activeMode === "focus" && !subject.trim()
+                        ? 0.45
+                        : pressed
+                          ? 0.85
+                          : 1,
                   },
                 ]}
               >
-                <Text style={s.actionBtnText}>
-                  🎯 Start {POMODORO.WORK_MINS} min Focus Session
-                </Text>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  {activeMode === "focus" ? (
+                    <Ionicons name="play-circle" size={18} color="#ffffff" />
+                  ) : activeMode === "short" ? (
+                    <MaterialCommunityIcons
+                      name="coffee"
+                      size={18}
+                      color="#ffffff"
+                    />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="weather-night"
+                      size={18}
+                      color="#ffffff"
+                    />
+                  )}
+                  <Text style={s.actionBtnText}>
+                    {activeMode === "focus"
+                      ? `Start ${POMODORO.WORK_MINS} min Focus`
+                      : activeMode === "short"
+                        ? `Start ${POMODORO.BREAK_MINS} min Break`
+                        : `Start ${POMODORO.LONG_BREAK_MINS} min Long Break`}
+                  </Text>
+                </View>
               </Pressable>
 
               {/* Pomodoro count */}
-              {session?.pomodoroCount ? (
-                <Text style={[s.pomodoroCount, { color: dt.tertiary }]}>
-                  🍅 {session.pomodoroCount} pomodoros completed today
-                </Text>
+              {pomodoroCount > 0 ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                    marginTop: 16,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="food-apple"
+                    size={13}
+                    color={dt.tertiary}
+                  />
+                  <Text
+                    style={[
+                      s.pomodoroCount,
+                      { color: dt.tertiary, marginTop: 0 },
+                    ]}
+                  >
+                    {pomodoroCount} pomodoro
+                    {pomodoroCount !== 1 ? "s" : ""} completed today
+                  </Text>
+                </View>
               ) : null}
             </View>
           </ScrollView>
         ) : (
           /* ══════════════════════════════════════════
-            TIMER VIEW  (running / paused)
-        ══════════════════════════════════════════ */
+              TIMER VIEW  (running / paused)
+          ══════════════════════════════════════════ */
           <View style={s.timerContainer}>
             {/* Subject chip */}
-            <View
-              style={[s.subjectChip, { backgroundColor: dt.primaryContainer }]}
-            >
-              <Text style={[s.subjectChipText, { color: dt.primary }]}>
-                {session?.subject}
-              </Text>
-            </View>
-
-            {/* Session-type chip (Work / Break) */}
-            <View
-              style={[s.sessionChip, { backgroundColor: timerAccentContainer }]}
-            >
-              <Text style={[s.sessionChipText, { color: timerAccentColor }]}>
-                {isBreak ? "☕ Break" : "🎯 Focus"}
-              </Text>
-            </View>
+            {session?.subject ? (
+              <View
+                style={[
+                  s.subjectChip,
+                  { backgroundColor: dt.primaryContainer },
+                ]}
+              >
+                <Text style={[s.subjectChipText, { color: dt.primary }]}>
+                  {session.subject}
+                </Text>
+              </View>
+            ) : null}
 
             {/* Timer circle */}
             <Animated.View
@@ -836,7 +1311,6 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
                 },
               ]}
             >
-              {/* Progress fill overlay */}
               <View
                 style={[
                   s.timerProgressOverlay,
@@ -846,15 +1320,15 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
                   },
                 ]}
               />
-
-              {/* Time text */}
               <Text style={[s.timerText, { color: dt.text }]}>
                 {formatCountdown(secondsRemaining)}
               </Text>
-
-              {/* Focus / Break label */}
-              <Text style={[s.timerLabel, { color: dt.textSecondary }]}>
-                {isBreak ? "Break" : "Focus"}
+              <Text style={[s.timerLabel, { color: timerAccentColor }]}>
+                {isBreak
+                  ? isLongBreak
+                    ? "Long Break"
+                    : "Short Break"
+                  : "Focus"}
               </Text>
             </Animated.View>
 
@@ -863,15 +1337,20 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
               {/* Pause / Resume */}
               <Pressable
                 onPress={handlePauseResume}
-                style={[
+                style={({ pressed }) => [
                   s.controlBtn,
                   {
                     backgroundColor: dt.surfaceHigh,
                     shadowColor: dt.shadow,
+                    opacity: pressed ? 0.8 : 1,
                   },
                 ]}
               >
-                <Text style={s.controlIcon}>{isRunning ? "⏸️" : "▶️"}</Text>
+                <Ionicons
+                  name={isRunning ? "pause" : "play"}
+                  size={18}
+                  color={dt.primary}
+                />
                 <Text style={[s.controlBtnText, { color: dt.primary }]}>
                   {isRunning ? "Pause" : "Resume"}
                 </Text>
@@ -880,29 +1359,42 @@ export function PomodoroTimer({ visible, onClose }: PomodoroTimerProps) {
               {/* Stop */}
               <Pressable
                 onPress={handleStop}
-                style={[
+                style={({ pressed }) => [
                   s.controlBtn,
                   {
                     backgroundColor: dt.error,
                     shadowColor: dt.shadow,
+                    opacity: pressed ? 0.8 : 1,
                   },
                 ]}
               >
-                <Text style={s.controlIcon}>⏹️</Text>
+                <Ionicons name="stop" size={18} color="#ffffff" />
                 <Text style={[s.controlBtnText, { color: "#ffffff" }]}>
                   Stop
                 </Text>
               </Pressable>
             </View>
 
-            {/* Skip break link */}
-            {isBreak ? (
-              <Pressable onPress={handleSkipBreak} style={s.textBtn}>
-                <Text style={[s.textBtnText, { color: dt.primary }]}>
-                  Skip Break →
-                </Text>
-              </Pressable>
-            ) : null}
+            {/* Skip button */}
+            <Pressable
+              onPress={handleSkip}
+              style={({ pressed }) => [
+                s.skipBtn,
+                {
+                  borderColor: timerAccentColor,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Ionicons
+                name="play-skip-forward"
+                size={16}
+                color={timerAccentColor}
+              />
+              <Text style={[s.skipBtnText, { color: timerAccentColor }]}>
+                {isBreak ? "Skip Break" : "Skip Focus"}
+              </Text>
+            </Pressable>
           </View>
         )}
       </View>

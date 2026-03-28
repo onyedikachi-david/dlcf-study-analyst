@@ -1,7 +1,8 @@
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import CustomAlert, { type AlertButton } from "@/components/CustomAlert";
 import { useAppStore } from "@/src/stores";
 import { minutesToHrs } from "@/src/utils/time";
-import React, { memo, useCallback, useMemo, useState } from "react";
+import React, { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -111,9 +112,7 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 12,
     gap: 10,
   },
-  searchIcon: {
-    fontSize: 18,
-  },
+
   searchInput: {
     flex: 1,
     fontSize: 14,
@@ -173,8 +172,6 @@ const heroStyles = StyleSheet.create({
     position: "absolute",
     top: 12,
     right: 12,
-    fontSize: 72,
-    opacity: 0.08,
   },
   heroTagRow: {
     flexDirection: "row",
@@ -231,9 +228,6 @@ const heroStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  heroIconBtnText: {
-    fontSize: 16,
-  },
 
   /* Side Card */
   sideCard: {
@@ -251,9 +245,7 @@ const heroStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
-  sideCardIconText: {
-    fontSize: 20,
-  },
+
   sideCardTitle: {
     fontSize: 16,
     fontWeight: "800",
@@ -438,9 +430,7 @@ const factStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  factIconText: {
-    fontSize: 16,
-  },
+
   factMeta: {
     flex: 1,
   },
@@ -496,9 +486,7 @@ const factStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  emptyIconText: {
-    fontSize: 36,
-  },
+
   emptyTitle: {
     fontSize: 20,
     fontWeight: "800",
@@ -576,8 +564,19 @@ const FactItem = memo(function FactItem({
   ];
   const iconStyle = iconColors[index % iconColors.length];
 
-  const iconEmojis = ["📄", "💡", "🧠", "📝", "📚", "✨", "🔬", "📖"];
-  const iconEmoji = iconEmojis[index % iconEmojis.length];
+  const iconNames: React.ComponentProps<
+    typeof MaterialCommunityIcons
+  >["name"][] = [
+    "file-document-outline",
+    "lightbulb-outline",
+    "brain",
+    "note-text-outline",
+    "book-open-outline",
+    "star-four-points-outline",
+    "flask-outline",
+    "book-outline",
+  ];
+  const iconName = iconNames[index % iconNames.length];
 
   const handleDelete = useCallback(() => {
     onDeleteRequest(index);
@@ -618,7 +617,11 @@ const FactItem = memo(function FactItem({
             <View
               style={[factStyles.factIcon, { backgroundColor: iconStyle.bg }]}
             >
-              <Text style={factStyles.factIconText}>{iconEmoji}</Text>
+              <MaterialCommunityIcons
+                name={iconName}
+                size={20}
+                color={iconStyle.text}
+              />
             </View>
             <View style={factStyles.factMeta}>
               <Text
@@ -653,7 +656,11 @@ const FactItem = memo(function FactItem({
               style={factStyles.factDeleteBtn}
               hitSlop={8}
             >
-              <Text style={factStyles.factDeleteText}>⋮</Text>
+              <MaterialCommunityIcons
+                name="dots-vertical"
+                size={20}
+                color={dt.textSecondary}
+              />
             </Pressable>
           </View>
         </Animated.View>
@@ -672,6 +679,7 @@ export default function VaultScreen() {
   const isDark = colorScheme === "dark";
 
   const { facts, addFact, removeFact, cumulativeMinutes } = useAppStore();
+  const flatListRef = useRef<FlatList>(null);
   const [newFact, setNewFact] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "recent">("all");
@@ -681,6 +689,7 @@ export default function VaultScreen() {
     message?: string;
     factContent?: string;
     icon?: string;
+    iconName?: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
     buttons?: AlertButton[];
   }>({ visible: false, title: "" });
 
@@ -751,18 +760,23 @@ export default function VaultScreen() {
         visible: true,
         title: "Vault Full",
         message: "You can only save up to 50 facts.",
-        icon: "🗄️",
+        iconName: "archive-off-outline",
         buttons: [{ text: "Got it", style: "default" }],
       });
     }
   }, [newFact, addFact]);
+
+  const handleViewAll = useCallback(() => {
+    // Scroll to the facts section (after the header)
+    flatListRef.current?.scrollToOffset({ offset: 600, animated: true });
+  }, []);
 
   const handleViewFact = useCallback((fact: string) => {
     setAlertConfig({
       visible: true,
       title: "Fact from Vault",
       factContent: fact,
-      icon: "📜",
+      iconName: "archive-eye-outline",
       buttons: [{ text: "Close", style: "cancel" }],
     });
   }, []);
@@ -784,7 +798,7 @@ export default function VaultScreen() {
         visible: true,
         title: "Delete Fact",
         message: "Are you sure you want to delete this fact?",
-        icon: "🗑️",
+        iconName: "delete-outline",
         buttons: [
           { text: "Cancel", style: "cancel" },
           {
@@ -819,6 +833,7 @@ export default function VaultScreen() {
       style={[baseStyles.container, { backgroundColor: dt.bg }]}
     >
       <FlatList
+        ref={flatListRef}
         data={filteredFacts}
         renderItem={renderItem}
         keyExtractor={(_: string, index: number) => `fact-${index}`}
@@ -870,7 +885,7 @@ export default function VaultScreen() {
                   { backgroundColor: dt.surfaceLow },
                 ]}
               >
-                <Text style={baseStyles.searchIcon}>🔍</Text>
+                <Ionicons name="search" size={18} color={dt.outlineVariant} />
                 <TextInput
                   style={[baseStyles.searchInput, { color: dt.text }]}
                   placeholder="Search your vault..."
@@ -896,7 +911,7 @@ export default function VaultScreen() {
                       Recently Archived
                     </Text>
                   </View>
-                  <Pressable>
+                  <Pressable onPress={handleViewAll}>
                     <Text
                       style={[heroStyles.sectionLink, { color: dt.primary }]}
                     >
@@ -916,7 +931,12 @@ export default function VaultScreen() {
                       },
                     ]}
                   >
-                    <Text style={heroStyles.heroCardDecor}>🏛️</Text>
+                    <MaterialCommunityIcons
+                      name="archive"
+                      size={28}
+                      color={dt.primary + "30"}
+                      style={heroStyles.heroCardDecor}
+                    />
                     <View>
                       <View style={heroStyles.heroTagRow}>
                         <View
@@ -978,7 +998,11 @@ export default function VaultScreen() {
                           { backgroundColor: dt.surfaceHigh },
                         ]}
                       >
-                        <Text style={heroStyles.heroIconBtnText}>📤</Text>
+                        <Ionicons
+                          name="share-outline"
+                          size={20}
+                          color={dt.text}
+                        />
                       </Pressable>
                     </View>
                   </View>
@@ -1000,7 +1024,11 @@ export default function VaultScreen() {
                           { backgroundColor: dt.secondaryContainer },
                         ]}
                       >
-                        <Text style={heroStyles.sideCardIconText}>🧠</Text>
+                        <MaterialCommunityIcons
+                          name="brain"
+                          size={24}
+                          color={dt.secondary}
+                        />
                       </View>
                       <Text
                         style={[heroStyles.sideCardTitle, { color: dt.text }]}
@@ -1213,7 +1241,11 @@ export default function VaultScreen() {
                 { backgroundColor: dt.primary + "15" },
               ]}
             >
-              <Text style={factStyles.emptyIconText}>🧠</Text>
+              <MaterialCommunityIcons
+                name="brain"
+                size={36}
+                color={dt.primary}
+              />
             </View>
             <Text style={[factStyles.emptyTitle, { color: dt.text }]}>
               {searchQuery ? "No facts found" : "Your vault is empty"}
@@ -1241,6 +1273,7 @@ export default function VaultScreen() {
         message={alertConfig.message}
         factContent={alertConfig.factContent}
         icon={alertConfig.icon}
+        iconName={alertConfig.iconName}
         buttons={alertConfig.buttons}
         onDismiss={dismissAlert}
       />

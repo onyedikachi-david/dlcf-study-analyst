@@ -6,12 +6,15 @@ import {
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
-import { ActivityIndicator, View } from "react-native";
-import Toast from "react-native-toast-message";
-import { useEffect } from "react";
+import { Animated } from "react-native";
+import { useEffect, useState, useRef } from "react";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { AuthProvider, useAuth } from "@/src/contexts/AuthContext";
+import { SplashScreen } from "@/components/SplashScreen";
+import { ToastProvider } from "@/components/Toast";
+
+const MINIMUM_SPLASH_DURATION = 5500; // Show splash for at least 5.5 seconds
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
@@ -19,9 +22,43 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
+  // Splash screen state
+  const [showSplash, setShowSplash] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
+  const splashStartTime = useRef(Date.now());
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  // Track when auth loading completes
+  useEffect(() => {
+    if (!loading) {
+      setAuthReady(true);
+    }
+  }, [loading]);
+
+  // Handle splash screen dismissal with minimum duration
+  useEffect(() => {
+    if (authReady) {
+      const elapsed = Date.now() - splashStartTime.current;
+      const remainingTime = Math.max(0, MINIMUM_SPLASH_DURATION - elapsed);
+
+      const timeout = setTimeout(() => {
+        // Fade out splash screen
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }).start(() => {
+          setShowSplash(false);
+        });
+      }, remainingTime);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [authReady, fadeAnim]);
+
   // Handle navigation when auth state changes
   useEffect(() => {
-    if (loading) return;
+    if (loading || showSplash) return;
 
     const inAuthGroup = segments[0] === "(auth)";
 
@@ -34,13 +71,15 @@ function RootLayoutNav() {
       console.log("Layout: Redirecting unauthenticated user to auth");
       router.replace("/(auth)/sign-in");
     }
-  }, [session, segments, loading, router]);
+  }, [session, segments, loading, router, showSplash]);
 
-  if (loading) {
+  // Show splash screen during initialization
+  if (showSplash) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
-      </View>
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        <SplashScreen />
+        <StatusBar style="auto" />
+      </Animated.View>
     );
   }
 
@@ -66,8 +105,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootLayoutNav />
-      <Toast />
+      <ToastProvider>
+        <RootLayoutNav />
+      </ToastProvider>
     </AuthProvider>
   );
 }

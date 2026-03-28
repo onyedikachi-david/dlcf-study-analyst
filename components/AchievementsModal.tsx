@@ -1,3 +1,4 @@
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useState, useMemo } from "react";
 import {
   Modal,
@@ -79,10 +80,6 @@ const headerStyles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-  },
-  closeIcon: {
-    fontSize: 18,
-    fontWeight: "700",
   },
 
   // Stats Bar
@@ -258,9 +255,7 @@ const cardStyles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-  pointsEmoji: {
-    fontSize: 14,
-  },
+
   pointsText: {
     fontSize: 14,
     fontWeight: "700",
@@ -356,7 +351,7 @@ function AchievementCard({ achievement, dt }: AchievementCardProps) {
           </Text>
         </View>
         <View style={s.pointsBadge}>
-          <Text style={[s.pointsEmoji, { color: dt.tertiary }]}>⭐</Text>
+          <MaterialCommunityIcons name="star" size={16} color={dt.tertiary} />
           <Text style={[s.pointsText, { color: dt.tertiary }]}>
             {achievement.points}
           </Text>
@@ -452,7 +447,16 @@ export default function AchievementsModal({
         <View style={s.header}>
           <View style={s.headerTop}>
             <View>
-              <Text style={[s.title, { color: dt.text }]}>🏆 Achievements</Text>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+              >
+                <MaterialCommunityIcons
+                  name="trophy"
+                  size={28}
+                  color={dt.primary}
+                />
+                <Text style={[s.title, { color: dt.text }]}>Achievements</Text>
+              </View>
               <Text style={[s.subtitle, { color: dt.textSecondary }]}>
                 {unlockedCount}/{totalCount} unlocked
               </Text>
@@ -461,7 +465,7 @@ export default function AchievementsModal({
               onPress={onClose}
               style={[s.closeButton, { backgroundColor: dt.surfaceMid }]}
             >
-              <Text style={[s.closeIcon, { color: dt.text }]}>✕</Text>
+              <Ionicons name="close" size={18} color={dt.text} />
             </Pressable>
           </View>
 

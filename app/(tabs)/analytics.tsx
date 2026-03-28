@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAppStore, useWeekStore } from "@/src/stores";
 import { durationMinutes, minutesToHrs } from "@/src/utils/time";
 import { extractMostStudiedCourse } from "@/src/utils/courseParser";
@@ -103,9 +104,13 @@ export default function AnalyticsScreen() {
     });
 
     return [
-      { period: "Morning", count: morning, emoji: "🌅" },
-      { period: "Afternoon", count: afternoon, emoji: "☀️" },
-      { period: "Evening", count: evening, emoji: "🌙" },
+      { period: "Morning", count: morning, icon: "weather-sunset-up" as const },
+      {
+        period: "Afternoon",
+        count: afternoon,
+        icon: "white-balance-sunny" as const,
+      },
+      { period: "Evening", count: evening, icon: "weather-night" as const },
     ];
   }, [week]);
 
@@ -170,12 +175,42 @@ export default function AnalyticsScreen() {
       }
     });
     return [
-      { label: "😫", value: dist[0], color: "#ef4444" },
-      { label: "😕", value: dist[1], color: "#f97316" },
-      { label: "😐", value: dist[2], color: "#eab308" },
-      { label: "🙂", value: dist[3], color: "#84cc16" },
-      { label: "😊", value: dist[4], color: "#22c55e" },
-      { label: "🤩", value: dist[5], color: "#10b981" },
+      {
+        label: "1",
+        icon: "emoticon-cry-outline" as const,
+        value: dist[0],
+        color: "#ef4444",
+      },
+      {
+        label: "2",
+        icon: "emoticon-sad-outline" as const,
+        value: dist[1],
+        color: "#f97316",
+      },
+      {
+        label: "3",
+        icon: "emoticon-neutral-outline" as const,
+        value: dist[2],
+        color: "#eab308",
+      },
+      {
+        label: "4",
+        icon: "emoticon-outline" as const,
+        value: dist[3],
+        color: "#84cc16",
+      },
+      {
+        label: "5",
+        icon: "emoticon-happy-outline" as const,
+        value: dist[4],
+        color: "#22c55e",
+      },
+      {
+        label: "6",
+        icon: "emoticon-excited-outline" as const,
+        value: dist[5],
+        color: "#10b981",
+      },
     ].filter((d) => d.value > 0);
   }, [week]);
 
@@ -237,7 +272,11 @@ export default function AnalyticsScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <View style={[s.headerIcon, { backgroundColor: dt.surfaceHigh }]}>
-              <Text style={s.headerIconText}>📊</Text>
+              <MaterialCommunityIcons
+                name="chart-bar"
+                size={20}
+                color={dt.primary}
+              />
             </View>
             <Text style={[s.headerTitle, { color: dt.primary }]}>
               FocusFlow
@@ -282,7 +321,11 @@ export default function AnalyticsScreen() {
                 { backgroundColor: dt.tertiaryContainer },
               ]}
             >
-              <Text style={s.heroScoreEmoji}>✨</Text>
+              <MaterialCommunityIcons
+                name="lightning-bolt"
+                size={28}
+                color={dt.tertiary}
+              />
             </View>
           </View>
         </View>
@@ -384,7 +427,11 @@ export default function AnalyticsScreen() {
                   { backgroundColor: dt.secondary + "15" },
                 ]}
               >
-                <Text style={s.statIconEmoji}>🔥</Text>
+                <MaterialCommunityIcons
+                  name="fire"
+                  size={22}
+                  color={dt.error}
+                />
               </View>
               <Text style={[s.statCardLabel, { color: dt.textSecondary }]}>
                 DAILY STREAK
@@ -409,7 +456,11 @@ export default function AnalyticsScreen() {
               <View
                 style={[s.statIconWrap, { backgroundColor: dt.primary + "15" }]}
               >
-                <Text style={s.statIconEmoji}>⏱️</Text>
+                <MaterialCommunityIcons
+                  name="timer-outline"
+                  size={22}
+                  color={dt.secondary}
+                />
               </View>
               <Text style={[s.statCardLabel, { color: dt.textSecondary }]}>
                 AVG SESSION
@@ -437,7 +488,11 @@ export default function AnalyticsScreen() {
                   { backgroundColor: dt.tertiary + "15" },
                 ]}
               >
-                <Text style={s.statIconEmoji}>⭐</Text>
+                <MaterialCommunityIcons
+                  name="star"
+                  size={22}
+                  color={dt.tertiary}
+                />
               </View>
               <Text style={[s.statCardLabel, { color: dt.textSecondary }]}>
                 XP GAINED
@@ -471,7 +526,11 @@ export default function AnalyticsScreen() {
               return (
                 <View key={item.period} style={s.distRow}>
                   <View style={s.distLeft}>
-                    <Text style={s.distEmoji}>{item.emoji}</Text>
+                    <MaterialCommunityIcons
+                      name={item.icon}
+                      size={20}
+                      color={dt.primary}
+                    />
                     <Text style={[s.distLabel, { color: dt.text }]}>
                       {item.period}
                     </Text>
@@ -514,7 +573,11 @@ export default function AnalyticsScreen() {
             <View style={s.usrList}>
               {usrDistribution.map((item, index) => (
                 <View key={index} style={s.usrRow}>
-                  <Text style={s.usrEmoji}>{item.label}</Text>
+                  <MaterialCommunityIcons
+                    name={item.icon}
+                    size={22}
+                    color={item.color}
+                  />
                   <View style={s.usrBarWrap}>
                     <View
                       style={[s.usrBarBg, { backgroundColor: dt.surfaceLow }]}
@@ -590,7 +653,11 @@ export default function AnalyticsScreen() {
           <Text style={[s.sectionTitle, { color: dt.text }]}>Your Records</Text>
           <View style={s.recordsList}>
             <View style={s.recordRow}>
-              <Text style={s.recordEmoji}>💎</Text>
+              <MaterialCommunityIcons
+                name="diamond-stone"
+                size={30}
+                color={dt.primary}
+              />
               <View style={s.recordInfo}>
                 <Text style={[s.recordLabel, { color: dt.text }]}>
                   Longest Streak
@@ -601,7 +668,11 @@ export default function AnalyticsScreen() {
               </View>
             </View>
             <View style={s.recordRow}>
-              <Text style={s.recordEmoji}>🎓</Text>
+              <MaterialCommunityIcons
+                name="school"
+                size={30}
+                color={dt.secondary}
+              />
               <View style={s.recordInfo}>
                 <Text style={[s.recordLabel, { color: dt.text }]}>
                   Total Study Time
@@ -612,7 +683,11 @@ export default function AnalyticsScreen() {
               </View>
             </View>
             <View style={s.recordRow}>
-              <Text style={s.recordEmoji}>⚡</Text>
+              <MaterialCommunityIcons
+                name="lightning-bolt"
+                size={30}
+                color={dt.tertiary}
+              />
               <View style={s.recordInfo}>
                 <Text style={[s.recordLabel, { color: dt.text }]}>
                   Best Single Day
@@ -624,7 +699,11 @@ export default function AnalyticsScreen() {
             </View>
             {mostStudiedTopic ? (
               <View style={s.recordRow}>
-                <Text style={s.recordEmoji}>🎯</Text>
+                <MaterialCommunityIcons
+                  name="target"
+                  size={30}
+                  color={dt.primary}
+                />
                 <View style={s.recordInfo}>
                   <Text style={[s.recordLabel, { color: dt.text }]}>
                     Most Studied Topic
@@ -695,9 +774,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerIconText: {
-    fontSize: 20,
-  },
+
   headerTitle: {
     fontSize: 22,
     fontWeight: "800",
@@ -751,9 +828,6 @@ const baseStyles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: "center",
     alignItems: "center",
-  },
-  heroScoreEmoji: {
-    fontSize: 28,
   },
 
   // Section title (reusable)
@@ -897,9 +971,7 @@ const statStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  statIconEmoji: {
-    fontSize: 22,
-  },
+
   statCardLabel: {
     fontSize: 10,
     fontWeight: "800",
@@ -1022,9 +1094,7 @@ const detailStyles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
   },
-  recordEmoji: {
-    fontSize: 30,
-  },
+
   recordInfo: {
     flex: 1,
   },

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "dlcf-study-analyst",
+    "name": "DLCF Study Analyst",
     "slug": "dlcf-study-analyst",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -39,7 +39,9 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

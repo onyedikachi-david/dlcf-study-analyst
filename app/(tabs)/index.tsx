@@ -1,5 +1,9 @@
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import CustomAlert, { type AlertButton } from "@/components/CustomAlert";
 import { PomodoroTimer } from "@/components/PomodoroTimer";
+import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
+import { useToast } from "@/components/Toast";
+import { useSyncStatus } from "@/src/hooks/useSyncStatus";
 import {
   useAppStore,
   useLeaderboardStore,
@@ -128,9 +132,6 @@ const baseStyles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-  },
-  headerBtnText: {
-    fontSize: 18,
   },
 });
 
@@ -303,9 +304,7 @@ const heroStyles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-  xpHintEmoji: {
-    fontSize: 12,
-  },
+
   xpHintText: {
     fontSize: 11,
     fontWeight: "600",
@@ -352,9 +351,7 @@ const toolStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
-  toolIconEmoji: {
-    fontSize: 20,
-  },
+
   toolName: {
     fontSize: 14,
     fontWeight: "800",
@@ -516,10 +513,7 @@ const profileStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  setupEmoji: {
-    fontSize: 40,
-    marginBottom: 12,
-  },
+
   setupTitle: {
     fontSize: 18,
     fontWeight: "800",
@@ -594,6 +588,42 @@ export default function HomeScreen() {
   const { upsert, seedIfNeeded } = useLeaderboardStore();
   const { achievements } = useAchievementsStore();
 
+  // Sync status tracking
+  const {
+    status: syncStatus,
+    triggerSync,
+    lastEvent,
+    clearLastEvent,
+  } = useSyncStatus();
+  const toast = useToast();
+
+  // Handle sync status toast notifications
+  useEffect(() => {
+    if (!lastEvent) return;
+
+    switch (lastEvent.type) {
+      case "online":
+        toast.success(
+          "Back Online",
+          lastEvent.hasPendingChanges
+            ? "Syncing your changes..."
+            : "Connected to network",
+        );
+        break;
+      case "offline":
+        toast.info("You're Offline", "Changes will sync when you reconnect");
+        break;
+      case "synced":
+        toast.success("Synced", "Your data is safely backed up");
+        break;
+      case "error":
+        toast.error("Sync Failed", "Tap the sync icon to retry");
+        break;
+    }
+
+    clearLastEvent();
+  }, [lastEvent, clearLastEvent, toast]);
+
   const [showConfetti, setShowConfetti] = useState(false);
   const [showPomodoro, setShowPomodoro] = useState(false);
   const [goalInput, setGoalInput] = useState(String(Math.round(goalMins / 60)));
@@ -602,6 +632,7 @@ export default function HomeScreen() {
     title: string;
     message?: string;
     icon?: string;
+    iconName?: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
     buttons?: AlertButton[];
   }>({ visible: false, title: "" });
 
@@ -672,7 +703,7 @@ export default function HomeScreen() {
   const studiedDays = totals.perDay.filter((m) => m > 0).length;
 
   const progressTitle = useMemo(() => {
-    if (goalHit) return "Weekly goal crushed! 🎯";
+    if (goalHit) return "Weekly goal crushed!";
     if (totals.progress >= 75) return "Almost there — push through!";
     if (totals.progress >= 50) return "Halfway to your weekly goal!";
     if (totals.progress >= 25) return "Good start — keep the momentum!";
@@ -680,8 +711,14 @@ export default function HomeScreen() {
     return "Ready to start your focus journey?";
   }, [totals.progress, totals.total, goalHit]);
 
-  const streakIcon =
-    streak >= 7 ? "💎" : streak >= 5 ? "⚡" : streak >= 3 ? "🔥" : "📖";
+  const streakIconName =
+    streak >= 7
+      ? "diamond-stone"
+      : streak >= 5
+        ? "lightning-bolt"
+        : streak >= 3
+          ? "fire"
+          : "book-open-variant";
 
   const handleGoalChange = useCallback(
     (text: string) => {
@@ -700,7 +737,7 @@ export default function HomeScreen() {
         visible: true,
         title: "Profile Required",
         message: "Please set your name in the Profile tab first.",
-        icon: "👤",
+        iconName: "account-circle-outline",
         buttons: [{ text: "Got it", style: "default" }],
       });
       return;
@@ -711,7 +748,7 @@ export default function HomeScreen() {
         visible: true,
         title: "No Sessions Yet",
         message: "Log some study sessions in the Tracker before submitting.",
-        icon: "📋",
+        iconName: "clipboard-text-outline",
         buttons: [{ text: "Got it", style: "default" }],
       });
       return;
@@ -800,6 +837,14 @@ export default function HomeScreen() {
               >
                 <Text style={baseStyles.levelBubbleText}>LV{level}</Text>
               </View>
+              {/* Sync Status Indicator */}
+              <View style={{ position: "absolute", top: -4, right: -4 }}>
+                <SyncStatusIndicator
+                  status={syncStatus}
+                  onPress={triggerSync}
+                  size="small"
+                />
+              </View>
             </View>
 
             {/* Brand */}
@@ -813,7 +858,11 @@ export default function HomeScreen() {
               onPress={() => router.push("/(tabs)/analytics")}
               style={[baseStyles.headerBtn, { backgroundColor: dt.surfaceLow }]}
             >
-              <Text style={baseStyles.headerBtnText}>📊</Text>
+              <MaterialCommunityIcons
+                name="chart-bar"
+                size={20}
+                color={dt.primary}
+              />
             </Pressable>
           </View>
         </View>
@@ -881,9 +930,18 @@ export default function HomeScreen() {
               onPress={handleSubmit}
               style={[heroStyles.submitBtn, { backgroundColor: dt.surfaceLow }]}
             >
-              <Text style={[heroStyles.submitBtnText, { color: dt.text }]}>
-                🚀 Submit
-              </Text>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <MaterialCommunityIcons
+                  name="rocket-launch"
+                  size={16}
+                  color={dt.text}
+                />
+                <Text style={[heroStyles.submitBtnText, { color: dt.text }]}>
+                  Submit
+                </Text>
+              </View>
             </Pressable>
           </View>
 
@@ -922,7 +980,11 @@ export default function HomeScreen() {
               {streak} <Text style={heroStyles.streakUnit}>Days</Text>
             </Text>
             <View style={heroStyles.streakIconWrap}>
-              <Text style={heroStyles.streakIcon}>{streakIcon}</Text>
+              <MaterialCommunityIcons
+                name={streakIconName}
+                size={26}
+                color={dt.onTertiaryContainer}
+              />
             </View>
           </View>
 
@@ -955,7 +1017,11 @@ export default function HomeScreen() {
               />
             </View>
             <View style={heroStyles.xpHint}>
-              <Text style={heroStyles.xpHintEmoji}>📈</Text>
+              <MaterialCommunityIcons
+                name="trending-up"
+                size={16}
+                color={dt.primary}
+              />
               <Text
                 style={[heroStyles.xpHintText, { color: dt.textSecondary }]}
               >
@@ -993,7 +1059,11 @@ export default function HomeScreen() {
                   { backgroundColor: dt.secondary },
                 ]}
               >
-                <Text style={toolStyles.toolIconEmoji}>⏱️</Text>
+                <MaterialCommunityIcons
+                  name="timer-outline"
+                  size={24}
+                  color={dt.primary}
+                />
               </View>
               <Text style={[toolStyles.toolName, { color: dt.text }]}>
                 Pomodoro
@@ -1017,7 +1087,11 @@ export default function HomeScreen() {
                   { backgroundColor: dt.primaryContainer },
                 ]}
               >
-                <Text style={toolStyles.toolIconEmoji}>📋</Text>
+                <MaterialCommunityIcons
+                  name="clipboard-text-outline"
+                  size={24}
+                  color={dt.secondary}
+                />
               </View>
               <Text style={[toolStyles.toolName, { color: dt.text }]}>
                 Tracker
@@ -1041,7 +1115,11 @@ export default function HomeScreen() {
                   { backgroundColor: dt.tertiaryContainer },
                 ]}
               >
-                <Text style={toolStyles.toolIconEmoji}>📊</Text>
+                <MaterialCommunityIcons
+                  name="chart-bar"
+                  size={24}
+                  color={dt.tertiary}
+                />
               </View>
               <Text style={[toolStyles.toolName, { color: dt.text }]}>
                 Analytics
@@ -1078,11 +1156,15 @@ export default function HomeScreen() {
                   { backgroundColor: dt.surfaceLow },
                 ]}
               >
-                <Text style={sessionStyles.sessionIconEmoji}>
-                  {mostStudied && mostStudied !== "No topics logged"
-                    ? "📖"
-                    : "📚"}
-                </Text>
+                <MaterialCommunityIcons
+                  name={
+                    mostStudied && mostStudied !== "No topics logged"
+                      ? "book-open-page-variant"
+                      : "bookshelf"
+                  }
+                  size={20}
+                  color={dt.primary}
+                />
               </View>
               <View style={sessionStyles.sessionInfo}>
                 <Text style={[sessionStyles.sessionTitle, { color: dt.text }]}>
@@ -1133,7 +1215,7 @@ export default function HomeScreen() {
                   { backgroundColor: dt.primaryContainer },
                 ]}
               >
-                <Text style={sessionStyles.sessionBtnText}>▶</Text>
+                <Ionicons name="play" size={16} color={dt.primary} />
               </Pressable>
             </View>
 
@@ -1150,7 +1232,11 @@ export default function HomeScreen() {
                   { backgroundColor: dt.surfaceMid },
                 ]}
               >
-                <Text style={sessionStyles.sessionIconEmoji}>🏆</Text>
+                <MaterialCommunityIcons
+                  name="trophy"
+                  size={22}
+                  color={dt.tertiary}
+                />
               </View>
               <View style={sessionStyles.sessionInfo}>
                 <Text style={[sessionStyles.sessionTitle, { color: dt.text }]}>
@@ -1198,9 +1284,18 @@ export default function HomeScreen() {
           ]}
         >
           <View style={goalStyles.header}>
-            <Text style={[goalStyles.title, { color: dt.text }]}>
-              🎯 Weekly Goal
-            </Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <MaterialCommunityIcons
+                name="target"
+                size={20}
+                color={dt.tertiary}
+              />
+              <Text style={[goalStyles.title, { color: dt.text }]}>
+                Weekly Goal
+              </Text>
+            </View>
           </View>
 
           <View style={goalStyles.editRow}>
@@ -1304,9 +1399,21 @@ export default function HomeScreen() {
                     : "Ready to crush your study goals today?"}
               </Text>
             </View>
-            <Text style={profileStyles.greetEmoji}>
-              {goalHit ? "🏆" : streak >= 5 ? "⚡" : streak >= 3 ? "🔥" : "📚"}
-            </Text>
+            <MaterialCommunityIcons
+              name={
+                goalHit
+                  ? "trophy"
+                  : streak >= 5
+                    ? "lightning-bolt"
+                    : streak >= 3
+                      ? "fire"
+                      : "bookshelf"
+              }
+              size={32}
+              color={
+                goalHit ? dt.tertiary : streak >= 3 ? dt.tertiary : dt.primary
+              }
+            />
           </View>
         ) : (
           <Pressable
@@ -1316,7 +1423,11 @@ export default function HomeScreen() {
               { backgroundColor: dt.primaryContainer + "25" },
             ]}
           >
-            <Text style={profileStyles.setupEmoji}>👋</Text>
+            <MaterialCommunityIcons
+              name="account-plus-outline"
+              size={32}
+              color={dt.primary}
+            />
             <Text style={[profileStyles.setupTitle, { color: dt.text }]}>
               Set up your profile
             </Text>
@@ -1346,6 +1457,7 @@ export default function HomeScreen() {
         title={alertConfig.title}
         message={alertConfig.message}
         icon={alertConfig.icon}
+        iconName={alertConfig.iconName}
         buttons={alertConfig.buttons}
         onDismiss={dismissAlert}
       />

@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   Pressable,
 } from "react-native";
-import Toast from "react-native-toast-message";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useToast } from "@/components/Toast";
 
 export default function SignInScreen() {
   const [email, setEmail] = useState("");
@@ -22,6 +22,7 @@ export default function SignInScreen() {
   const [error, setError] = useState("");
   const router = useRouter();
   const { signIn } = useAuth();
+  const toast = useToast();
 
   const handleSignIn = async () => {
     setError("");
@@ -65,37 +66,19 @@ export default function SignInScreen() {
         }
 
         setError(errorMessage);
-        Toast.show({
-          type: "error",
-          text1: "Sign In Failed",
-          text2: errorMessage,
-          position: "top",
-          visibilityTime: 4000,
-        });
+        toast.error("Sign In Failed", errorMessage);
       } else {
         // Sign-in successful - error is null
         console.log("Sign-in successful! Session created.");
         setError("");
-        Toast.show({
-          type: "success",
-          text1: "Welcome back!",
-          text2: "Loading your dashboard...",
-          position: "top",
-          visibilityTime: 2000,
-        });
+        toast.success("Welcome back!", "Loading your dashboard...");
         // Explicitly navigate to dashboard
         router.replace("/");
       }
     } catch (err) {
       console.error("Unexpected error during sign-in:", err);
       setError("An unexpected error occurred. Please try again.");
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "An unexpected error occurred. Please try again.",
-        position: "top",
-        visibilityTime: 4000,
-      });
+      toast.error("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }

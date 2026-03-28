@@ -10,25 +10,20 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import Toast from "react-native-toast-message";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useToast } from "@/components/Toast";
 
 export default function ResetPasswordScreen() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { resetPassword } = useAuth();
+  const toast = useToast();
 
   const handleResetPassword = async () => {
     if (!email) {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Please enter your email address",
-        position: "top",
-        visibilityTime: 3000,
-      });
+      toast.error("Error", "Please enter your email address");
       return;
     }
 
@@ -37,22 +32,12 @@ export default function ResetPasswordScreen() {
     setLoading(false);
 
     if (error) {
-      Toast.show({
-        type: "error",
-        text1: "Reset Failed",
-        text2: error.message,
-        position: "top",
-        visibilityTime: 4000,
-      });
+      toast.error("Reset Failed", error.message);
     } else {
-      Toast.show({
-        type: "success",
-        text1: "Check Your Email",
-        text2:
-          "We have sent you a password reset link. Please check your email inbox.",
-        position: "top",
-        visibilityTime: 4000,
-      });
+      toast.success(
+        "Check Your Email",
+        "We have sent you a password reset link. Please check your email inbox.",
+      );
       setTimeout(() => {
         router.back();
       }, 2000);

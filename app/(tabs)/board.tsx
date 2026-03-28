@@ -1,3 +1,5 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useToast } from "@/components/Toast";
 import {
   useLeaderboardStore,
   useProfileStore,
@@ -32,7 +34,6 @@ import {
   View,
   type DimensionValue,
 } from "react-native";
-import Toast from "react-native-toast-message";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type AchievementFilter = "all" | "locked";
@@ -47,6 +48,7 @@ export default function BoardScreen() {
   const { week } = useWeekStore();
   const { goalMins, cumulativeMinutes, earnedBadges } = useAppStore();
   const { achievements } = useAchievementsStore();
+  const toast = useToast();
   const [pinning, setPinning] = useState(false);
   const [achievementFilter, setAchievementFilter] =
     useState<AchievementFilter>("all");
@@ -103,13 +105,10 @@ export default function BoardScreen() {
 
   const handlePinToBoard = useCallback(async () => {
     if (!user?.id) {
-      Toast.show({
-        type: "error",
-        text1: "Authentication Required",
-        text2: "Please sign in to pin to leaderboard",
-        position: "top",
-        visibilityTime: 3000,
-      });
+      toast.error(
+        "Authentication Required",
+        "Please sign in to pin to leaderboard",
+      );
       return;
     }
 
@@ -123,13 +122,10 @@ export default function BoardScreen() {
     }, 0);
 
     if (totalMinutes === 0) {
-      Toast.show({
-        type: "info",
-        text1: "No Study Time Recorded",
-        text2: "Complete some study sessions first!",
-        position: "top",
-        visibilityTime: 3000,
-      });
+      toast.info(
+        "No Study Time Recorded",
+        "Complete some study sessions first!",
+      );
       return;
     }
 
@@ -145,21 +141,12 @@ export default function BoardScreen() {
       });
 
       if (error) {
-        Toast.show({
-          type: "error",
-          text1: "Pin Failed",
-          text2: "Failed to pin to leaderboard. Please try again.",
-          position: "top",
-          visibilityTime: 3000,
-        });
+        toast.error(
+          "Pin Failed",
+          "Failed to pin to leaderboard. Please try again.",
+        );
       } else {
-        Toast.show({
-          type: "success",
-          text1: "Success! 🎉",
-          text2: "You're now on the leaderboard!",
-          position: "top",
-          visibilityTime: 3000,
-        });
+        toast.success("Success!", "You're now on the leaderboard!");
       }
     } finally {
       setPinning(false);
@@ -176,13 +163,7 @@ export default function BoardScreen() {
   const handleReact = useCallback(
     async (name: string, type: keyof Reaction) => {
       if (!user?.id) {
-        Toast.show({
-          type: "error",
-          text1: "Authentication Required",
-          text2: "Please sign in to react",
-          position: "top",
-          visibilityTime: 3000,
-        });
+        toast.error("Authentication Required", "Please sign in to react");
         return;
       }
 
@@ -196,16 +177,10 @@ export default function BoardScreen() {
       );
 
       if (error) {
-        Toast.show({
-          type: "error",
-          text1: "Failed to add reaction",
-          text2: "Please try again",
-          position: "top",
-          visibilityTime: 2000,
-        });
+        toast.error("Failed to add reaction", "Please try again");
       }
     },
-    [react, user],
+    [react, user, toast],
   );
 
   // Theme-aware design tokens
@@ -256,7 +231,11 @@ export default function BoardScreen() {
                 },
               ]}
             >
-              <Text style={styles.headerIconText}>🏆</Text>
+              <MaterialCommunityIcons
+                name="trophy"
+                size={20}
+                color={dt.onPrimary}
+              />
             </View>
             <Text style={[styles.headerTitle, { color: dt.primary }]}>
               FocusFlow
@@ -364,7 +343,11 @@ export default function BoardScreen() {
                   { backgroundColor: "rgba(255,255,255,0.3)" },
                 ]}
               >
-                <Text style={styles.streakIconEmoji}>🔥</Text>
+                <MaterialCommunityIcons
+                  name="fire"
+                  size={32}
+                  color={dt.tertiary}
+                />
               </View>
               <Text style={[styles.streakLabel, { color: dt.tertiary }]}>
                 Focus Streak
@@ -387,9 +370,11 @@ export default function BoardScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.miniStatIcon, { color: dt.secondary }]}>
-                  ⏱️
-                </Text>
+                <MaterialCommunityIcons
+                  name="timer-outline"
+                  size={20}
+                  color={dt.secondary}
+                />
                 <Text style={[styles.miniStatValue, { color: dt.text }]}>
                   {totalFocusHours}h
                 </Text>
@@ -406,9 +391,11 @@ export default function BoardScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.miniStatIcon, { color: dt.primary }]}>
-                  ✅
-                </Text>
+                <MaterialCommunityIcons
+                  name="check-circle-outline"
+                  size={20}
+                  color={dt.primary}
+                />
                 <Text style={[styles.miniStatValue, { color: dt.text }]}>
                   {completedSessions}
                 </Text>
@@ -433,9 +420,16 @@ export default function BoardScreen() {
             },
           ]}
         >
-          <Text style={[styles.pinButtonText, { color: dt.onPrimary }]}>
-            {pinning ? "⏳ Pinning..." : "📌 Pin My Progress to Board"}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <MaterialCommunityIcons
+              name={pinning ? "loading" : "pin-outline"}
+              size={18}
+              color={dt.onPrimary}
+            />
+            <Text style={[styles.pinButtonText, { color: dt.onPrimary }]}>
+              {pinning ? "Pinning..." : "Pin My Progress to Board"}
+            </Text>
+          </View>
         </Pressable>
 
         {/* ─── Achievements Grid ─── */}
@@ -556,9 +550,24 @@ export default function BoardScreen() {
                     },
                   ]}
                 >
-                  <Text style={styles.podiumMedal}>
-                    {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
-                  </Text>
+                  <MaterialCommunityIcons
+                    name={
+                      index === 0
+                        ? "medal"
+                        : index === 1
+                          ? "medal-outline"
+                          : "podium-bronze"
+                    }
+                    size={28}
+                    color={
+                      index === 0
+                        ? "#f59e0b"
+                        : index === 1
+                          ? "#94a3b8"
+                          : "#b45309"
+                    }
+                    style={{ marginBottom: 4 }}
+                  />
                   <View
                     style={[
                       styles.podiumAvatarCircle,
@@ -591,7 +600,11 @@ export default function BoardScreen() {
                       onPress={() => handleReact(entry.name, "fire")}
                       style={styles.podiumReactionBtn}
                     >
-                      <Text style={styles.podiumReactionEmoji}>🔥</Text>
+                      <MaterialCommunityIcons
+                        name="fire"
+                        size={16}
+                        color={dt.error}
+                      />
                       <Text
                         style={[
                           styles.podiumReactionCount,
@@ -605,7 +618,11 @@ export default function BoardScreen() {
                       onPress={() => handleReact(entry.name, "cheers")}
                       style={styles.podiumReactionBtn}
                     >
-                      <Text style={styles.podiumReactionEmoji}>👏</Text>
+                      <MaterialCommunityIcons
+                        name="hand-clap"
+                        size={16}
+                        color={dt.tertiary}
+                      />
                       <Text
                         style={[
                           styles.podiumReactionCount,
@@ -624,11 +641,20 @@ export default function BoardScreen() {
           {/* Full List */}
           {entries.length > 0 && (
             <View style={styles.listSection}>
-              <Text
-                style={[styles.listSectionLabel, { color: dt.textSecondary }]}
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                📋 All Students ({entries.length})
-              </Text>
+                <MaterialCommunityIcons
+                  name="account-group-outline"
+                  size={16}
+                  color={dt.textSecondary}
+                />
+                <Text
+                  style={[styles.listSectionLabel, { color: dt.textSecondary }]}
+                >
+                  All Students ({entries.length})
+                </Text>
+              </View>
               {entries.map((entry, index) => (
                 <View
                   key={entry.name}
@@ -687,7 +713,11 @@ export default function BoardScreen() {
                         onPress={() => handleReact(entry.name, "fire")}
                         style={styles.reactionBtn}
                       >
-                        <Text style={styles.reactionIcon}>🔥</Text>
+                        <MaterialCommunityIcons
+                          name="fire"
+                          size={16}
+                          color={dt.error}
+                        />
                         <Text
                           style={[
                             styles.reactionCount,
@@ -701,7 +731,11 @@ export default function BoardScreen() {
                         onPress={() => handleReact(entry.name, "cheers")}
                         style={styles.reactionBtn}
                       >
-                        <Text style={styles.reactionIcon}>👏</Text>
+                        <MaterialCommunityIcons
+                          name="hand-clap"
+                          size={16}
+                          color={dt.tertiary}
+                        />
                         <Text
                           style={[
                             styles.reactionCount,
@@ -720,7 +754,11 @@ export default function BoardScreen() {
 
           {entries.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📌</Text>
+              <MaterialCommunityIcons
+                name="pin-outline"
+                size={40}
+                color={dt.outlineVariant}
+              />
               <Text style={[styles.emptyText, { color: dt.text }]}>
                 No students yet!
               </Text>
@@ -886,7 +924,11 @@ function AchievementCard({ achievement, dt, isDark }: AchievementCardProps) {
               { borderColor: dt.outlineVariant },
             ]}
           >
-            <Text style={styles.achievementLockedIcon}>🔒</Text>
+            <MaterialCommunityIcons
+              name="lock-outline"
+              size={16}
+              color={dt.outlineVariant}
+            />
           </View>
         )}
       </View>
@@ -971,9 +1013,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerIconText: {
-    fontSize: 20,
-  },
+
   headerTitle: {
     fontSize: 22,
     fontWeight: "800",
@@ -1092,9 +1132,7 @@ const heroStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  streakIconEmoji: {
-    fontSize: 32,
-  },
+
   streakLabel: {
     fontSize: 15,
     fontWeight: "700",
@@ -1359,9 +1397,7 @@ const boardStyles = StyleSheet.create({
     alignItems: "center",
     gap: 2,
   },
-  podiumReactionEmoji: {
-    fontSize: 12,
-  },
+
   podiumReactionCount: {
     fontSize: 10,
     fontWeight: "600",
@@ -1441,9 +1477,7 @@ const boardStyles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
   },
-  reactionIcon: {
-    fontSize: 13,
-  },
+
   reactionCount: {
     fontSize: 11,
     fontWeight: "600",

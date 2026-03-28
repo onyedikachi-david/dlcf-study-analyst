@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo } from "react";
 import {
   Modal,
@@ -65,8 +66,12 @@ export interface CustomAlertProps {
    */
   factContent?: string;
   buttons?: AlertButton[];
-  /** Decorative emoji shown above the title. */
+  /** Decorative emoji shown above the title. Ignored when `iconName` is provided. */
   icon?: string;
+  /** MaterialCommunityIcons icon name. When provided, renders an MCI icon instead of the emoji. */
+  iconName?: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  /** Color for the MCI icon. Defaults to dt.primary. */
+  iconColor?: string;
   onDismiss?: () => void;
 }
 
@@ -209,6 +214,8 @@ export default function CustomAlert({
   factContent,
   buttons,
   icon,
+  iconName,
+  iconColor,
   onDismiss,
 }: CustomAlertProps) {
   const colorScheme = useColorScheme();
@@ -217,27 +224,27 @@ export default function CustomAlert({
 
   const dt = useMemo<DesignTokens>(
     () => ({
-      bg:                  isDark ? "#0d1117" : "#f8fafc",
-      surfaceLow:          isDark ? "#161b22" : "#f1f5f9",
-      surfaceMid:          isDark ? "#1c2128" : "#e8edf2",
-      surfaceHigh:         isDark ? "#21262d" : "#dde3e9",
-      surfaceHighest:      isDark ? "#30363d" : "#ced5dc",
-      surfaceCard:         isDark ? "#161b22" : "#ffffff",
-      primary:             isDark ? "#7fb6ff" : "#0060ad",
-      primaryContainer:    isDark ? "#003e7a" : "#d4e7ff",
-      onPrimary:           isDark ? "#003258" : "#ffffff",
-      secondary:           isDark ? "#4ecdc4" : "#146a65",
-      secondaryContainer:  isDark ? "#0d3d3a" : "#cef5f1",
-      onSecondary:         isDark ? "#00312e" : "#ffffff",
-      tertiary:            isDark ? "#eec540" : "#745c00",
-      tertiaryContainer:   isDark ? "#564400" : "#ffeea3",
+      bg: isDark ? "#0d1117" : "#f8fafc",
+      surfaceLow: isDark ? "#161b22" : "#f1f5f9",
+      surfaceMid: isDark ? "#1c2128" : "#e8edf2",
+      surfaceHigh: isDark ? "#21262d" : "#dde3e9",
+      surfaceHighest: isDark ? "#30363d" : "#ced5dc",
+      surfaceCard: isDark ? "#161b22" : "#ffffff",
+      primary: isDark ? "#7fb6ff" : "#0060ad",
+      primaryContainer: isDark ? "#003e7a" : "#d4e7ff",
+      onPrimary: isDark ? "#003258" : "#ffffff",
+      secondary: isDark ? "#4ecdc4" : "#146a65",
+      secondaryContainer: isDark ? "#0d3d3a" : "#cef5f1",
+      onSecondary: isDark ? "#00312e" : "#ffffff",
+      tertiary: isDark ? "#eec540" : "#745c00",
+      tertiaryContainer: isDark ? "#564400" : "#ffeea3",
       onTertiaryContainer: isDark ? "#ffeea3" : "#241a00",
-      text:                isDark ? "#e6edf3" : "#0d1117",
-      textSecondary:       isDark ? "#8b949e" : "#57606a",
-      outline:             isDark ? "#30363d" : "#d0d7de",
-      outlineVariant:      isDark ? "#21262d" : "#e8edf2",
-      error:               isDark ? "#f87171" : "#ac3434",
-      shadow:              isDark ? "rgba(0,0,0,0.5)" : "rgba(42,52,57,0.14)",
+      text: isDark ? "#e6edf3" : "#0d1117",
+      textSecondary: isDark ? "#8b949e" : "#57606a",
+      outline: isDark ? "#30363d" : "#d0d7de",
+      outlineVariant: isDark ? "#21262d" : "#e8edf2",
+      error: isDark ? "#f87171" : "#ac3434",
+      shadow: isDark ? "rgba(0,0,0,0.5)" : "rgba(42,52,57,0.14)",
     }),
     [isDark],
   );
@@ -266,9 +273,10 @@ export default function CustomAlert({
   }));
 
   // Resolve buttons — default to a single "OK" button
-  const resolvedButtons: AlertButton[] = buttons && buttons.length > 0
-    ? buttons
-    : [{ text: "OK", style: "default" }];
+  const resolvedButtons: AlertButton[] =
+    buttons && buttons.length > 0
+      ? buttons
+      : [{ text: "OK", style: "default" }];
 
   const handleButtonPress = useCallback(
     (btn: AlertButton) => {
@@ -303,7 +311,9 @@ export default function CustomAlert({
             { opacity: pressed ? 0.6 : 1 },
           ]}
         >
-          <Text style={[overlayStyles.buttonGhostText, { color: dt.textSecondary }]}>
+          <Text
+            style={[overlayStyles.buttonGhostText, { color: dt.textSecondary }]}
+          >
             {btn.text}
           </Text>
         </Pressable>
@@ -330,7 +340,9 @@ export default function CustomAlert({
     // Default / primary button
     // If there are multiple non-cancel buttons, the first one is primary (filled),
     // subsequent ones are outlined.
-    const nonCancelButtons = resolvedButtons.filter((b) => b.style !== "cancel");
+    const nonCancelButtons = resolvedButtons.filter(
+      (b) => b.style !== "cancel",
+    );
     const isFirstNonCancel = nonCancelButtons[0] === btn;
 
     if (!isFirstNonCancel) {
@@ -382,10 +394,7 @@ export default function CustomAlert({
         ]}
       >
         {/* Tap backdrop to dismiss (same behaviour as native Alert cancel) */}
-        <Pressable
-          style={StyleSheet.absoluteFillObject}
-          onPress={onDismiss}
-        />
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onDismiss} />
 
         <Animated.View
           style={[
@@ -399,8 +408,18 @@ export default function CustomAlert({
         >
           {/* Icon */}
           <View style={overlayStyles.iconWrap}>
-            <View style={[overlayStyles.iconCircle, { backgroundColor: iconBg }]}>
-              <Text style={overlayStyles.iconText}>{resolvedIcon}</Text>
+            <View
+              style={[overlayStyles.iconCircle, { backgroundColor: iconBg }]}
+            >
+              {iconName ? (
+                <MaterialCommunityIcons
+                  name={iconName}
+                  size={32}
+                  color={iconColor ?? dt.primary}
+                />
+              ) : (
+                <Text style={overlayStyles.iconText}>{resolvedIcon}</Text>
+              )}
             </View>
           </View>
 
@@ -410,7 +429,9 @@ export default function CustomAlert({
               {title}
             </Text>
             {!factContent && message ? (
-              <Text style={[overlayStyles.message, { color: dt.textSecondary }]}>
+              <Text
+                style={[overlayStyles.message, { color: dt.textSecondary }]}
+              >
                 {message}
               </Text>
             ) : null}
@@ -428,7 +449,12 @@ export default function CustomAlert({
               ]}
             >
               <View style={factStyles.factTagRow}>
-                <View style={[factStyles.factTag, { backgroundColor: dt.primaryContainer }]}>
+                <View
+                  style={[
+                    factStyles.factTag,
+                    { backgroundColor: dt.primaryContainer },
+                  ]}
+                >
                   <Text style={[factStyles.factTagText, { color: dt.primary }]}>
                     Vault Entry
                   </Text>
@@ -447,7 +473,9 @@ export default function CustomAlert({
           ) : null}
 
           {/* Divider */}
-          <View style={[overlayStyles.divider, { backgroundColor: dt.outline }]} />
+          <View
+            style={[overlayStyles.divider, { backgroundColor: dt.outline }]}
+          />
 
           {/* Buttons */}
           <View style={overlayStyles.buttonGroup}>

@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useWeekStore, useAppStore } from "@/src/stores";
 import { USRLabels } from "@/src/theme/colors";
 import type { DayName, Session } from "@/src/types";
@@ -93,9 +94,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerIconText: {
-    fontSize: 20,
-  },
+
   headerTitle: {
     fontSize: 24,
     fontWeight: "800",
@@ -223,9 +222,6 @@ const heroStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  streakIcon: {
-    fontSize: 24,
-  },
 
   /* Target Card */
   targetCard: {
@@ -263,10 +259,9 @@ const heroStyles = StyleSheet.create({
   },
   targetDecor: {
     position: "absolute",
-    right: -4,
-    bottom: -8,
-    fontSize: 64,
-    opacity: 0.08,
+    right: 12,
+    bottom: 8,
+    opacity: 0.25,
   },
 });
 
@@ -1226,7 +1221,11 @@ export default function TrackerScreen() {
                 { backgroundColor: dt.primaryContainer + "50" },
               ]}
             >
-              <Text style={baseStyles.headerIconText}>📊</Text>
+              <MaterialCommunityIcons
+                name="chart-bar"
+                size={20}
+                color={dt.primary}
+              />
             </View>
             <Text style={[baseStyles.headerTitle, { color: dt.text }]}>
               Study Tracker
@@ -1342,7 +1341,11 @@ export default function TrackerScreen() {
                     { backgroundColor: dt.tertiaryContainer },
                   ]}
                 >
-                  <Text style={heroStyles.streakIcon}>🔥</Text>
+                  <MaterialCommunityIcons
+                    name="fire"
+                    size={32}
+                    color={dt.tertiary}
+                  />
                 </View>
               </View>
             </View>
@@ -1384,7 +1387,12 @@ export default function TrackerScreen() {
               >
                 {minutesToHrs(todayTotal)} completed
               </Text>
-              <Text style={heroStyles.targetDecor}>⚡</Text>
+              <MaterialCommunityIcons
+                name="lightning-bolt"
+                size={22}
+                color={dt.secondary}
+                style={heroStyles.targetDecor}
+              />
             </View>
           </View>
         </View>
@@ -1521,7 +1529,11 @@ export default function TrackerScreen() {
             ]}
           >
             <View style={insightStyles.cardHeader}>
-              <Text style={{ fontSize: 18 }}>📈</Text>
+              <MaterialCommunityIcons
+                name="trending-up"
+                size={20}
+                color={dt.primary}
+              />
               <Text style={[insightStyles.cardTitle, { color: dt.text }]}>
                 Focus Peak
               </Text>
@@ -1575,7 +1587,11 @@ export default function TrackerScreen() {
             ]}
           >
             <View style={insightStyles.cardHeader}>
-              <Text style={{ fontSize: 18 }}>🏆</Text>
+              <MaterialCommunityIcons
+                name="trophy"
+                size={20}
+                color={dt.tertiary}
+              />
               <Text style={[insightStyles.cardTitle, { color: dt.text }]}>
                 Best Day
               </Text>
@@ -1599,7 +1615,11 @@ export default function TrackerScreen() {
                       { backgroundColor: dt.tertiaryContainer },
                     ]}
                   >
-                    <Text style={{ fontSize: 12 }}>⭐</Text>
+                    <MaterialCommunityIcons
+                      name="star"
+                      size={12}
+                      color={dt.tertiary}
+                    />
                   </View>
                   <View
                     style={[
@@ -1607,7 +1627,11 @@ export default function TrackerScreen() {
                       { backgroundColor: dt.primaryContainer },
                     ]}
                   >
-                    <Text style={{ fontSize: 12 }}>⏱️</Text>
+                    <MaterialCommunityIcons
+                      name="timer-outline"
+                      size={12}
+                      color={dt.primary}
+                    />
                   </View>
                   <View
                     style={[
@@ -1615,7 +1639,11 @@ export default function TrackerScreen() {
                       { backgroundColor: dt.secondaryContainer },
                     ]}
                   >
-                    <Text style={{ fontSize: 12 }}>🎓</Text>
+                    <MaterialCommunityIcons
+                      name="school"
+                      size={12}
+                      color={dt.secondary}
+                    />
                   </View>
                 </View>
               </>

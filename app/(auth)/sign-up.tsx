@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   Pressable,
 } from "react-native";
-import Toast from "react-native-toast-message";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useToast } from "@/components/Toast";
 
 export default function SignUpScreen() {
   const [name, setName] = useState("");
@@ -28,6 +28,7 @@ export default function SignUpScreen() {
   const [error, setError] = useState("");
   const router = useRouter();
   const { signUp } = useAuth();
+  const toast = useToast();
 
   const handleSignUp = async () => {
     setError("");
@@ -83,24 +84,15 @@ export default function SignUpScreen() {
         }
 
         setError(errorMessage);
-        Toast.show({
-          type: "error",
-          text1: "Sign Up Failed",
-          text2: errorMessage,
-          position: "top",
-          visibilityTime: 4000,
-        });
+        toast.error("Sign Up Failed", errorMessage);
       } else {
         // Sign-up successful - error is null
         console.log("Sign-up successful! Account created.");
         setError("");
-        Toast.show({
-          type: "success",
-          text1: "Success!",
-          text2: "Account created successfully! You can now sign in.",
-          position: "top",
-          visibilityTime: 3000,
-        });
+        toast.success(
+          "Success!",
+          "Account created successfully! You can now sign in.",
+        );
         setTimeout(() => {
           router.replace("./sign-in");
         }, 1500);
@@ -108,13 +100,7 @@ export default function SignUpScreen() {
     } catch (err) {
       console.error("Unexpected error during sign-up:", err);
       setError("An unexpected error occurred. Please try again.");
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "An unexpected error occurred. Please try again.",
-        position: "top",
-        visibilityTime: 4000,
-      });
+      toast.error("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }

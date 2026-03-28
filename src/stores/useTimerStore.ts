@@ -1,8 +1,8 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { TimerSession } from '../types';
-import { STORAGE_KEYS, POMODORO } from '../utils/constants';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { TimerSession } from "../types";
+import { STORAGE_KEYS, POMODORO } from "../utils/constants";
 
 interface TimerStore {
   session: TimerSession | null;
@@ -10,6 +10,7 @@ interface TimerStore {
 
   startWork: (subject: string) => void;
   startBreak: () => void;
+  startLongBreak: () => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -34,8 +35,8 @@ export const useTimerStore = create<TimerStore>()(
             durationMins: POMODORO.WORK_MINS,
             elapsedMins: 0,
             startedAt: Date.now(),
-            type: 'work',
-            status: 'running',
+            type: "work",
+            status: "running",
             pomodoroCount: get().session?.pomodoroCount ?? 0,
           },
           isVisible: true,
@@ -49,8 +50,23 @@ export const useTimerStore = create<TimerStore>()(
                 durationMins: POMODORO.BREAK_MINS,
                 elapsedMins: 0,
                 startedAt: Date.now(),
-                type: 'break',
-                status: 'running',
+                type: "break",
+                status: "running",
+              }
+            : null,
+          isVisible: true,
+        })),
+
+      startLongBreak: () =>
+        set((state) => ({
+          session: state.session
+            ? {
+                ...state.session,
+                durationMins: POMODORO.LONG_BREAK_MINS,
+                elapsedMins: 0,
+                startedAt: Date.now(),
+                type: "break",
+                status: "running",
               }
             : null,
           isVisible: true,
@@ -59,35 +75,35 @@ export const useTimerStore = create<TimerStore>()(
       pause: () =>
         set((state) => ({
           session: state.session
-            ? { ...state.session, status: 'paused' }
+            ? { ...state.session, status: "paused" }
             : null,
         })),
 
       resume: () =>
         set((state) => ({
           session: state.session
-            ? { ...state.session, status: 'running', startedAt: Date.now() }
+            ? { ...state.session, status: "running", startedAt: Date.now() }
             : null,
         })),
 
       stop: () =>
         set((state) => ({
           session: state.session
-            ? { ...state.session, status: 'completed' }
+            ? { ...state.session, status: "completed" }
             : null,
         })),
 
       complete: () =>
         set((state) => ({
           session: state.session
-            ? { ...state.session, status: 'completed' }
+            ? { ...state.session, status: "completed" }
             : null,
         })),
 
       cancel: () =>
         set((state) => ({
           session: state.session
-            ? { ...state.session, status: 'cancelled' }
+            ? { ...state.session, status: "cancelled" }
             : null,
         })),
 
@@ -103,7 +119,10 @@ export const useTimerStore = create<TimerStore>()(
       incrementPomodoroCount: () =>
         set((state) => ({
           session: state.session
-            ? { ...state.session, pomodoroCount: state.session.pomodoroCount + 1 }
+            ? {
+                ...state.session,
+                pomodoroCount: state.session.pomodoroCount + 1,
+              }
             : null,
         })),
 
@@ -112,6 +131,6 @@ export const useTimerStore = create<TimerStore>()(
     {
       name: STORAGE_KEYS.TIMER,
       storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    },
+  ),
 );

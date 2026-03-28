@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   useAppStore,
   useLeaderboardStore,
@@ -16,7 +17,7 @@ import { ProfileSyncService } from "@/src/services/profileSync";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { useAchievementsStore } from "@/src/stores/useAchievementsStore";
 import { getUnlockedCount, getTotalPoints } from "@/src/utils/achievements";
-import Toast from "react-native-toast-message";
+import { useToast } from "@/components/Toast";
 import AchievementsModal from "@/components/AchievementsModal";
 import CustomAlert, { type AlertButton } from "@/components/CustomAlert";
 import React, { useCallback, useMemo, useRef, useState } from "react";
@@ -46,6 +47,7 @@ export default function ProfileScreen() {
   const { getUserRank } = useLeaderboardStore();
   const { achievements } = useAchievementsStore();
 
+  const toast = useToast();
   const syncTimeoutRef = useRef<number | null>(null);
   const userRank = getUserRank(profile.name);
   const [achievementsVisible, setAchievementsVisible] = useState(false);
@@ -56,6 +58,7 @@ export default function ProfileScreen() {
     title: string;
     message?: string;
     icon?: string;
+    iconName?: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
     buttons?: AlertButton[];
   }>({ visible: false, title: "" });
 
@@ -128,7 +131,7 @@ export default function ProfileScreen() {
       visible: true,
       title: "Sign Out",
       message: "Are you sure you want to sign out?",
-      icon: "👋",
+      iconName: "logout",
       buttons: [
         { text: "Cancel", style: "cancel" },
         {
@@ -139,22 +142,10 @@ export default function ProfileScreen() {
             try {
               const { error } = await signOut();
               if (error) {
-                Toast.show({
-                  type: "error",
-                  text1: "Sign Out Failed",
-                  text2: error.message,
-                  position: "top",
-                  visibilityTime: 3000,
-                });
+                toast.error("Sign Out Failed", error.message);
               }
             } catch (_err) {
-              Toast.show({
-                type: "error",
-                text1: "Sign Out Failed",
-                text2: "An unexpected error occurred",
-                position: "top",
-                visibilityTime: 3000,
-              });
+              toast.error("Sign Out Failed", "An unexpected error occurred");
             } finally {
               setSigningOut(false);
             }
@@ -209,7 +200,7 @@ export default function ProfileScreen() {
         visible: true,
         title: "No Data",
         message: "No study sessions to archive this week.",
-        icon: "📭",
+        iconName: "calendar-remove-outline",
         buttons: [{ text: "OK", style: "default" }],
       });
       return;
@@ -226,7 +217,7 @@ export default function ProfileScreen() {
       visible: true,
       title: "Week Archived!",
       message: "Your week has been saved to the archive.",
-      icon: "🏆",
+      iconName: "check-circle-outline",
       buttons: [{ text: "Nice!", style: "default" }],
     });
   }, [earnedBadges, userRank]);
@@ -267,9 +258,11 @@ export default function ProfileScreen() {
               >
                 {value || placeholder}
               </Text>
-              <Text style={[s.fieldEditIcon, { color: dt.outlineVariant }]}>
-                ✏️
-              </Text>
+              <MaterialCommunityIcons
+                name="pencil-outline"
+                size={16}
+                color={dt.outlineVariant}
+              />
             </View>
           </Pressable>
         )}
@@ -311,7 +304,11 @@ export default function ProfileScreen() {
                   { backgroundColor: dt.tertiaryContainer, borderColor: dt.bg },
                 ]}
               >
-                <Text style={s.headerAvatarBadgeIcon}>🏅</Text>
+                <MaterialCommunityIcons
+                  name="medal"
+                  size={14}
+                  color={dt.tertiary}
+                />
               </View>
             </View>
             <Text style={[s.headerTitle, { color: dt.primary }]}>
@@ -551,7 +548,11 @@ export default function ProfileScreen() {
 
             {/* Customize / Summary Card */}
             <View style={[s.customizeCard, { backgroundColor: dt.primary }]}>
-              <Text style={s.customizeEmoji}>✨</Text>
+              <MaterialCommunityIcons
+                name="star-four-points"
+                size={22}
+                color={dt.onPrimary}
+              />
               <Text style={[s.customizeTitle, { color: dt.onPrimary }]}>
                 Your Journey
               </Text>
@@ -698,6 +699,7 @@ export default function ProfileScreen() {
         title={alertConfig.title}
         message={alertConfig.message}
         icon={alertConfig.icon}
+        iconName={alertConfig.iconName}
         buttons={alertConfig.buttons}
         onDismiss={dismissAlert}
       />
@@ -752,9 +754,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerAvatarBadgeIcon: {
-    fontSize: 8,
-  },
+
   headerTitle: {
     fontSize: 22,
     fontWeight: "800",
@@ -999,10 +999,7 @@ const archiveStyles = StyleSheet.create({
     borderRadius: 20,
     padding: 22,
   },
-  customizeEmoji: {
-    fontSize: 32,
-    marginBottom: 12,
-  },
+
   customizeTitle: {
     fontSize: 19,
     fontWeight: "800",
@@ -1120,7 +1117,6 @@ const detailStyles = StyleSheet.create({
     flex: 1,
   },
   fieldEditIcon: {
-    fontSize: 14,
     marginLeft: 8,
   },
 });
