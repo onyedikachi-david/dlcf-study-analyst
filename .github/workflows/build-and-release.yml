@@ -1,0 +1,164 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - "v*" # Triggers on version tags like v1.0.0, v1.2.3, etc.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., 1.0.0)"
+        required: true
+        type: string
+
+env:
+  EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for changelog generation
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Expo CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build APK with EAS
+        run: eas build --platform android --profile preview --non-interactive --output ./app-release.apk
+
+      - name: Get version from tag or input
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          echo "## What's Changed" > changelog.md
+          echo "" >> changelog.md
+
+          # Get the previous tag or use initial commit
+          if [ -n "${{ steps.prev_tag.outputs.prev_tag }}" ]; then
+            RANGE="${{ steps.prev_tag.outputs.prev_tag }}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          # Features
+          FEATURES=$(git log $RANGE --pretty=format:"- %s" --grep="^feat" --no-merges 2>/dev/null || true)
+          if [ -n "$FEATURES" ]; then
+            echo "### ✨ Features" >> changelog.md
+            echo "$FEATURES" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Bug Fixes
+          FIXES=$(git log $RANGE --pretty=format:"- %s" --grep="^fix" --no-merges 2>/dev/null || true)
+          if [ -n "$FIXES" ]; then
+            echo "### 🐛 Bug Fixes" >> changelog.md
+            echo "$FIXES" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Performance
+          PERF=$(git log $RANGE --pretty=format:"- %s" --grep="^perf" --no-merges 2>/dev/null || true)
+          if [ -n "$PERF" ]; then
+            echo "### ⚡ Performance" >> changelog.md
+            echo "$PERF" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Documentation
+          DOCS=$(git log $RANGE --pretty=format:"- %s" --grep="^docs" --no-merges 2>/dev/null || true)
+          if [ -n "$DOCS" ]; then
+            echo "### 📚 Documentation" >> changelog.md
+            echo "$DOCS" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Refactoring
+          REFACTOR=$(git log $RANGE --pretty=format:"- %s" --grep="^refactor" --no-merges 2>/dev/null || true)
+          if [ -n "$REFACTOR" ]; then
+            echo "### ♻️ Refactoring" >> changelog.md
+            echo "$REFACTOR" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Chores/Dependencies
+          CHORES=$(git log $RANGE --pretty=format:"- %s" --grep="^chore" --no-merges 2>/dev/null || true)
+          if [ -n "$CHORES" ]; then
+            echo "### 🔧 Maintenance" >> changelog.md
+            echo "$CHORES" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Other commits (not matching conventional format)
+          OTHER=$(git log $RANGE --pretty=format:"- %s" --no-merges --invert-grep --grep="^feat" --grep="^fix" --grep="^perf" --grep="^docs" --grep="^refactor" --grep="^chore" --grep="^style" --grep="^test" --grep="^build" --grep="^ci" 2>/dev/null || true)
+          if [ -n "$OTHER" ]; then
+            echo "### 📝 Other Changes" >> changelog.md
+            echo "$OTHER" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
+          # Add installation instructions
+          echo "---" >> changelog.md
+          echo "" >> changelog.md
+          echo "## 📱 Installation" >> changelog.md
+          echo "" >> changelog.md
+          echo "1. Download the APK file below" >> changelog.md
+          echo "2. Enable \"Install from unknown sources\" on your Android device" >> changelog.md
+          echo "3. Open the APK file to install" >> changelog.md
+          echo "" >> changelog.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.prev_tag.outputs.prev_tag }}...${{ steps.version.outputs.tag }}" >> changelog.md
+
+          # Output for the release
+          cat changelog.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: DLCF Study Analyst v${{ steps.version.outputs.version }}
+          body_path: changelog.md
+          files: ./app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ steps.version.outputs.version }}
+          path: ./app-release.apk
+          retention-days: 30
