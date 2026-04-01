@@ -68,7 +68,7 @@ jobs:
             echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - Checking build status..."
 
             BUILD_STATUS=$(eas build:view $BUILD_ID --json 2>/dev/null || echo '{"status":"unknown"}')
-            STATUS=$(echo "$BUILD_STATUS" | jq -r '.status')
+            STATUS=$(echo "$BUILD_STATUS" | jq -r '.status' | tr '[:upper:]' '[:lower:]')
             echo "Current status: $STATUS"
 
             if [ "$STATUS" == "finished" ]; then
@@ -76,12 +76,12 @@ jobs:
               echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
               echo "Build finished! Artifact URL: $ARTIFACT_URL"
               exit 0
-            elif [ "$STATUS" == "errored" ]; then
+            elif [ "$STATUS" == "errored" ] || [ "$STATUS" == "error" ]; then
               echo "Build errored!"
               ERROR_MSG=$(echo "$BUILD_STATUS" | jq -r '.error.message // "Unknown error"')
               echo "Error: $ERROR_MSG"
               exit 1
-            elif [ "$STATUS" == "canceled" ]; then
+            elif [ "$STATUS" == "canceled" ] || [ "$STATUS" == "cancelled" ]; then
               echo "Build was canceled!"
               exit 1
             fi
