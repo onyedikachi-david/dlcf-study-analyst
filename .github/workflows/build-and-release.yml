@@ -41,8 +41,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build APK with EAS
-        run: eas build --platform android --profile preview --non-interactive --output ./app-release.apk
+      - name: Build APK with EAS and get build URL
+        id: eas_build
+        run: |
+          # Run EAS build and capture the output
+          BUILD_OUTPUT=$(eas build --platform android --profile preview --non-interactive --json)
+          echo "Build output: $BUILD_OUTPUT"
+
+          # Extract the build ID
+          BUILD_ID=$(echo "$BUILD_OUTPUT" | jq -r '.[0].id')
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+
+          # Wait for build to complete and get artifact URL
+          echo "Waiting for build to complete..."
+          while true; do
+            BUILD_STATUS=$(eas build:view $BUILD_ID --json 2>/dev/null || echo '{"status":"unknown"}')
+            STATUS=$(echo "$BUILD_STATUS" | jq -r '.status')
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" == "finished" ]; then
+              ARTIFACT_URL=$(echo "$BUILD_STATUS" | jq -r '.artifacts.buildUrl')
+              echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
+              echo "Build finished! Artifact URL: $ARTIFACT_URL"
+              break
+            elif [ "$STATUS" == "errored" ] || [ "$STATUS" == "canceled" ]; then
+              echo "Build failed with status: $STATUS"
+              exit 1
+            fi
+
+            sleep 30
+          done
+
+      - name: Download APK
+        run: |
+          curl -L -o app-release.apk "${{ steps.eas_build.outputs.artifact_url }}"
+          ls -la app-release.apk
 
       - name: Get version from tag or input
         id: version
@@ -114,19 +147,19 @@ jobs:
             echo "" >> changelog.md
           fi
 
+          # CI/CD
+          CI=$(git log $RANGE --pretty=format:"- %s" --grep="^ci" --no-merges 2>/dev/null || true)
+          if [ -n "$CI" ]; then
+            echo "### 🔄 CI/CD" >> changelog.md
+            echo "$CI" >> changelog.md
+            echo "" >> changelog.md
+          fi
+
           # Chores/Dependencies
           CHORES=$(git log $RANGE --pretty=format:"- %s" --grep="^chore" --no-merges 2>/dev/null || true)
           if [ -n "$CHORES" ]; then
             echo "### 🔧 Maintenance" >> changelog.md
             echo "$CHORES" >> changelog.md
-            echo "" >> changelog.md
-          fi
-
-          # Other commits (not matching conventional format)
-          OTHER=$(git log $RANGE --pretty=format:"- %s" --no-merges --invert-grep --grep="^feat" --grep="^fix" --grep="^perf" --grep="^docs" --grep="^refactor" --grep="^chore" --grep="^style" --grep="^test" --grep="^build" --grep="^ci" 2>/dev/null || true)
-          if [ -n "$OTHER" ]; then
-            echo "### 📝 Other Changes" >> changelog.md
-            echo "$OTHER" >> changelog.md
             echo "" >> changelog.md
           fi
 
@@ -139,7 +172,10 @@ jobs:
           echo "2. Enable \"Install from unknown sources\" on your Android device" >> changelog.md
           echo "3. Open the APK file to install" >> changelog.md
           echo "" >> changelog.md
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.prev_tag.outputs.prev_tag }}...${{ steps.version.outputs.tag }}" >> changelog.md
+
+          if [ -n "${{ steps.prev_tag.outputs.prev_tag }}" ]; then
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.prev_tag.outputs.prev_tag }}...${{ steps.version.outputs.tag }}" >> changelog.md
+          fi
 
           # Output for the release
           cat changelog.md
