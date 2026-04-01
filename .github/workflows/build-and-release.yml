@@ -19,6 +19,7 @@ jobs:
   build:
     name: Build Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
@@ -41,20 +42,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build APK with EAS and get build URL
+      - name: Start EAS Build
         id: eas_build
         run: |
-          # Run EAS build and capture the output
-          BUILD_OUTPUT=$(eas build --platform android --profile preview --non-interactive --json)
+          # Run EAS build with --no-wait and --json to get build ID immediately
+          BUILD_OUTPUT=$(eas build --platform android --profile preview --non-interactive --no-wait --json)
           echo "Build output: $BUILD_OUTPUT"
 
           # Extract the build ID
           BUILD_ID=$(echo "$BUILD_OUTPUT" | jq -r '.[0].id')
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Build started with ID: $BUILD_ID"
 
-          # Wait for build to complete and get artifact URL
-          echo "Waiting for build to complete..."
-          while true; do
+      - name: Wait for EAS Build to complete
+        id: wait_build
+        run: |
+          BUILD_ID="${{ steps.eas_build.outputs.build_id }}"
+          echo "Waiting for build $BUILD_ID to complete..."
+
+          MAX_ATTEMPTS=120  # 120 * 30s = 60 minutes max wait
+          ATTEMPT=0
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - Checking build status..."
+
             BUILD_STATUS=$(eas build:view $BUILD_ID --json 2>/dev/null || echo '{"status":"unknown"}')
             STATUS=$(echo "$BUILD_STATUS" | jq -r '.status')
             echo "Current status: $STATUS"
@@ -63,19 +75,31 @@ jobs:
               ARTIFACT_URL=$(echo "$BUILD_STATUS" | jq -r '.artifacts.buildUrl')
               echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
               echo "Build finished! Artifact URL: $ARTIFACT_URL"
-              break
-            elif [ "$STATUS" == "errored" ] || [ "$STATUS" == "canceled" ]; then
-              echo "Build failed with status: $STATUS"
+              exit 0
+            elif [ "$STATUS" == "errored" ]; then
+              echo "Build errored!"
+              ERROR_MSG=$(echo "$BUILD_STATUS" | jq -r '.error.message // "Unknown error"')
+              echo "Error: $ERROR_MSG"
+              exit 1
+            elif [ "$STATUS" == "canceled" ]; then
+              echo "Build was canceled!"
               exit 1
             fi
 
+            echo "Build still in progress, waiting 30 seconds..."
             sleep 30
           done
 
+          echo "Build timed out after $MAX_ATTEMPTS attempts"
+          exit 1
+
       - name: Download APK
         run: |
-          curl -L -o app-release.apk "${{ steps.eas_build.outputs.artifact_url }}"
+          ARTIFACT_URL="${{ steps.wait_build.outputs.artifact_url }}"
+          echo "Downloading APK from: $ARTIFACT_URL"
+          curl -L -o app-release.apk "$ARTIFACT_URL"
           ls -la app-release.apk
+          file app-release.apk
 
       - name: Get version from tag or input
         id: version
